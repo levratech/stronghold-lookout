@@ -5,10 +5,17 @@
     { "type": "cookie", "name": "stronghold_token" }
   ],
   "jwt": {
-    "algorithm": "HS256",
-    "secret": "${GATEWAY_JWT_SECRET}",
+    "validation_mode": "static_jwks_rs256",
+    "algorithm": "RS256",
     "issuer": "stronghold-sentry",
-    "audience": ["aegis"]
+    "audience": ["aegis"],
+    "keys": [
+      {
+        "kid": "${GATEWAY_JWT_KEY_ID}",
+        "algorithm": "RS256",
+        "public_key_pem": "${GATEWAY_JWT_PUBLIC_KEY_PEM}"
+      }
+    ]
   },
   "trusted_proxy": {
     "enabled": true,
