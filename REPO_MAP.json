@@ -1,0 +1,85 @@
+{
+  "name": "stronghold-lookout",
+  "purpose": "Client/operator tooling and config templates for inspecting, generating, and pushing Stronghold edge configuration.",
+  "status": "working and hardened baseline",
+  "repo_role_in_system": "Operator/client-side config and control surface",
+  "related_repos": [
+    "stronghold",
+    "stronghold-drawbridge"
+  ],
+  "depends_on": [
+    "NATS",
+    "Stronghold runtime-generated edge config"
+  ],
+  "entrypoints": [
+    "cmd/lookout/main.go",
+    "lookout",
+    "config.json",
+    "estate_config.json",
+    "final_config.json"
+  ],
+  "service_boundaries": {
+    "cli": "Builds and sends requests for config retrieval/push and related operator workflows.",
+    "templates": "Example or safe template edge config documents, not live secret carriers."
+  },
+  "critical_invariants": [
+    "Tracked JSON files are templates/examples, not live secret-bearing runtime configs.",
+    "Live edge config should come from generated runtime artifacts, then be pushed via Lookout.",
+    "Gateway JWT validation config should describe public-key verification, not private signing state."
+  ],
+  "known_risks": [
+    "Template drift from generated runtime config is possible if the bootstrap script changes and templates are not refreshed."
+  ],
+  "read_order": [
+    "README.md",
+    "cmd/lookout/main.go",
+    "internal/lookout/doc.go",
+    "internal/lookout/tools.go",
+    "internal/lookout/bridge.go",
+    "estate_config.json",
+    "final_config.json",
+    "config.json"
+  ],
+  "important_files": [
+    "README.md",
+    "cmd/lookout/main.go",
+    "internal/lookout/tools.go",
+    "internal/lookout/bridge.go",
+    "estate_config.json",
+    "final_config.json",
+    "config.json"
+  ],
+  "subsystems": {
+    "cli_entry": [
+      "cmd/lookout/main.go"
+    ],
+    "operator_logic": [
+      "internal/lookout/tools.go",
+      "internal/lookout/bridge.go",
+      "internal/lookout/doc.go"
+    ],
+    "versioning": [
+      "internal/version/version.go"
+    ],
+    "config_templates": [
+      "config.json",
+      "estate_config.json",
+      "final_config.json"
+    ]
+  },
+  "files": [
+    "README.md",
+    "estate_config.json",
+    "go.sum",
+    "final_config.json",
+    "LICENSE",
+    "lookout",
+    "go.mod",
+    "cmd/lookout/main.go",
+    "config.json",
+    "internal/version/version.go",
+    "internal/lookout/bridge.go",
+    "internal/lookout/doc.go",
+    "internal/lookout/tools.go"
+  ]
+}
