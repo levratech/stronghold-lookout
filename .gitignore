@@ -1,0 +1,29 @@
+# Binaries
+/bin/
+*.exe
+
+# Go build artefacts
+*.o
+*.a
+*.so
+
+# Go test cache & coverage
+*.test
+*.out
+coverage.html
+
+# Vendor directory (if ever used)
+/vendor/
+
+# OS detritus
+.DS_Store
+Thumbs.db
+
+# Editor artefacts
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Generated runtime config should not be tracked here
+rendered/

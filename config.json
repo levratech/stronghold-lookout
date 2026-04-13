@@ -1,0 +1,78 @@
+{
+  "version": "template-seed-v3",
+  "token_sources": [
+    { "type": "authorization_header", "prefix": "Bearer " },
+    { "type": "cookie", "name": "stronghold_token" }
+  ],
+	"jwt": {
+		"algorithm": "HS256",
+		"secret": "${GATEWAY_JWT_SECRET}",
+		"issuer": "stronghold-sentry",
+		"audience": ["aegis"]
+	},
+  "trusted_proxy": {
+    "enabled": true,
+	    "trusted_sources": ["${TRUSTED_PROXY_CIDR_1}", "${TRUSTED_PROXY_CIDR_2}"]
+  },
+  "resolution_mode": "token",
+  "interfaces": [
+    {
+      "pattern": "temco.chronchive.com",
+      "match": {
+        "interface_id": "temco",
+        "domain": "temco.chronchive.com",
+        "enabled": true
+      }
+    },
+    {
+      "pattern": "levra.tech",
+      "match": {
+        "interface_id": "levra",
+        "domain": "levra.tech",
+        "enabled": true
+      }
+    }
+  ],
+  "assets": [
+    {
+      "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
+      "match": {
+        "asset_id": "temco-all",
+        "interface_id": "temco",
+        "matched_path_pattern": "/",
+        "path_match_type": "prefix",
+        "priority": 100,
+        "upstream_target": "http://temcotools.internal:3000",
+        "auth_mode": "public",
+        "fallback": { "type": "deny", "status": 403 },
+        "enabled": true
+      }
+    },
+    {
+      "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
+      "match": {
+        "asset_id": "drawbridge-auth",
+        "interface_id": "levra",
+        "matched_path_pattern": "/_/auth/",
+        "path_match_type": "prefix",
+        "priority": 100,
+        "upstream_target": "http://drawbridge:3000",
+        "auth_mode": "public",
+        "fallback": { "type": "deny", "status": 403 },
+        "enabled": true
+      }
+    },
+    {
+      "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
+      "match": {
+        "asset_id": "levra-all",
+        "interface_id": "levra",
+        "matched_path_pattern": "/*",
+        "path_match_type": "glob",
+        "upstream_target": "http://sentry:8081",
+        "auth_mode": "jwt",
+	        "enabled": true
+	      }
+	    }
+  ]
+}
