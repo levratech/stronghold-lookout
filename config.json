@@ -116,8 +116,8 @@
       "match": {
         "asset_id": "levra-all",
         "interface_id": "levra",
-        "matched_path_pattern": "/*",
-        "path_match_type": "glob",
+        "matched_path_pattern": "/",
+        "path_match_type": "prefix",
         "upstream_target": "http://sentry:8081",
         "auth_mode": "jwt",
 	        "enabled": true
