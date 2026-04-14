@@ -27,3 +27,10 @@ Thumbs.db
 
 # Generated runtime config should not be tracked here
 rendered/
+
+# Web cockpit artefacts
+web/node_modules/
+web/dist/
+web/*.tsbuildinfo
+web/vite.config.js
+web/vite.config.d.ts

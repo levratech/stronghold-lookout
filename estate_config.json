@@ -72,6 +72,30 @@
       }
     },
     {
+      "methods": ["GET", "HEAD"],
+      "match": {
+        "asset_id": "drawbridge-auth-session",
+        "interface_id": "levra",
+        "matched_path_pattern": "/_/auth/session",
+        "path_match_type": "exact",
+        "priority": 200,
+        "upstream_target": "http://drawbridge:3000",
+        "auth_mode": "jwt",
+        "identity_headers": {
+          "X-Aegis-Principal": "{principal_id}",
+          "X-Aegis-Context": "{context_id}",
+          "X-Aegis-Realm": "{realm_id}",
+          "X-Aegis-Badges": "{badge_ids}"
+        },
+        "headers": {
+          "X-Stronghold-Domain-ID": "${ROOT_DOMAIN_ID}",
+          "X-Stronghold-Interface-ID": "${PRIMARY_INTERFACE_ID}"
+        },
+        "fallback": { "type": "deny", "status": 403 },
+        "enabled": true
+      }
+    },
+    {
       "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
       "match": {
         "asset_id": "drawbridge-auth",
@@ -89,6 +113,24 @@
           "X-Stronghold-OAuth-Userinfo-URL": "https://openidconnect.googleapis.com/v1/userinfo",
           "X-Stronghold-Domain-ID": "${ROOT_DOMAIN_ID}",
           "X-Stronghold-Interface-ID": "${PRIMARY_INTERFACE_ID}"
+        },
+        "fallback": { "type": "deny", "status": 403 },
+        "enabled": true
+      }
+    },
+    {
+      "methods": ["GET"],
+      "match": {
+        "asset_id": "lookout-nats-ws",
+        "interface_id": "levra",
+        "matched_path_pattern": "/_/nats",
+        "path_match_type": "exact",
+        "priority": 190,
+        "upstream_target": "http://nats:8443",
+        "auth_mode": "jwt",
+        "websocket_mode": "require",
+        "path_transform": {
+          "strip_prefix": "/_/nats"
         },
         "fallback": { "type": "deny", "status": 403 },
         "enabled": true

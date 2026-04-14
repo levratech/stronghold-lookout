@@ -13,7 +13,7 @@ This repository will eventually house three distinct client surfaces, each disci
 | Client | Description | Status |
 |---|---|---|
 | **Interactive CLI** | A command-driven runtime for operators who prefer precision over pantomime. Built on [Cobra](https://github.com/spf13/cobra). | Forthcoming |
-| **Web Lookout** | A browser-based dashboard for situational awareness. Assets will reside in `ui/`. | Forthcoming |
+| **Web Lookout** | A browser-based operator cockpit for same-origin auth, NATS transport, and estate visibility. Assets now live in `web/`. | Initial shell implemented |
 | **Electron Shell** | A desktop application for those who require their dashboards delivered natively. | Forthcoming |
 
 None of the above are implemented yet. The scaffolding you see here is the **Industrial Rail** — everything necessary to receive future features cleanly and without drama.
@@ -28,7 +28,8 @@ stronghold-lookout/
 ├── internal/     # Shared logic that is nobody else's business (NATS helpers, common types)
 │   └── version/  # Canonical build-time version information
 ├── pkg/          # Public-facing client libraries, should external consumers ever require them
-├── ui/           # Reserved for web-based frontend assets
+├── web/          # Web-based Lookout cockpit (React + TypeScript + Vite)
+├── ui/           # Legacy reserved frontend boundary
 ├── go.mod        # Module: github.com/levratech/stronghold-lookout
 └── go.sum        # The immutable ledger of what was fetched and when
 ```
@@ -59,9 +60,14 @@ go mod download
 
 # Confirm the module builds cleanly
 go build ./...
+
+# Run the web cockpit
+cd web
+npm install
+npm run dev
 ```
 
-No binaries are produced yet. That is entirely by design.
+The Go CLI remains intact. The web cockpit is a separate UI-only app that builds to static assets.
 
 The JSON config files tracked in this repository are now templates/examples only. Do not place live secrets in them. The intended flow is:
 
@@ -71,6 +77,14 @@ cd /srv/stronghold
 ```
 
 That bootstrap step writes the live edge config to `stronghold/runtime/lookout/edge_routes_v1.json`. Push the generated file, not the tracked template JSON in this repo.
+
+The web cockpit is intentionally same-origin in design:
+
+- UI is expected at `/`
+- auth is expected under `/_/auth`
+- NATS over WebSocket is expected under `/_/nats`
+
+See [`web/README.md`](web/README.md) and [`web/IMPLEMENTATION_NOTES.md`](web/IMPLEMENTATION_NOTES.md) for the current web-shell details and backend gaps.
 
 ---
 
