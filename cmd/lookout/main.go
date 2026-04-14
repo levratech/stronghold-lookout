@@ -164,6 +164,10 @@ func configCmd() *cobra.Command {
 				fmt.Printf("Failed to update configuration. (Error: %v)\n", err)
 				return
 			}
+			if err := session.Publish("aegis.config.update", []byte("kv-updated")); err != nil {
+				fmt.Printf("Configuration updated in KV, but update notification failed. (Error: %v)\n", err)
+				return
+			}
 			fmt.Println("Configuration updated successfully.")
 		},
 	})
@@ -188,6 +192,10 @@ func configCmd() *cobra.Command {
 
 			if err := session.PutKV("aegis_config", "edge_routes_v1", data); err != nil {
 				fmt.Printf("Failed to push configuration. (Error: %v)\n", err)
+				return
+			}
+			if err := session.Publish("aegis.config.update", []byte("kv-pushed")); err != nil {
+				fmt.Printf("Configuration stored in KV, but update notification failed. (Error: %v)\n", err)
 				return
 			}
 			fmt.Println("Configuration pushed successfully.")

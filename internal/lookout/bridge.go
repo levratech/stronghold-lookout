@@ -7,6 +7,7 @@ package lookout
 import (
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -101,6 +102,17 @@ func (s *Session) PutKV(bucket, key string, data []byte) error {
 
 	_, err = kv.Put(key, data)
 	return err
+}
+
+// Publish sends a Core NATS message on the supplied subject.
+func (s *Session) Publish(subject string, data []byte) error {
+	if strings.TrimSpace(subject) == "" {
+		return fmt.Errorf("Publish failed. A subject is required.")
+	}
+	if err := s.nc.Publish(subject, data); err != nil {
+		return fmt.Errorf("Publish failed. (Error: %w)", err)
+	}
+	return nil
 }
 
 // Close terminates the NATS connection.
