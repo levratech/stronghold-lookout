@@ -1,65 +1,113 @@
 {
   "name": "stronghold-lookout",
-  "purpose": "Client/operator tooling and config templates for inspecting, generating, and pushing Stronghold edge configuration.",
-  "status": "working and hardened baseline",
-  "repo_role_in_system": "Operator/client-side config and control surface",
+  "purpose": "Operator tooling repo for Stronghold, now spanning both the Go CLI runtime and a React/TypeScript web cockpit for same-origin auth, NATS transport, and estate visibility.",
+  "status": "active CLI plus web cockpit repo with production-shaped browser shell",
+  "repo_role_in_system": "Operator control surface and config tooling for the Stronghold estate",
   "related_repos": [
     "stronghold",
     "stronghold-drawbridge"
   ],
   "depends_on": [
     "NATS",
-    "Stronghold runtime-generated edge config"
+    "JetStream KV edge config",
+    "Stronghold runtime-generated edge config",
+    "same-origin /_/auth session bootstrap",
+    "same-origin /_/nats WebSocket rail"
   ],
   "entrypoints": [
     "cmd/lookout/main.go",
-    "lookout",
-    "config.json",
-    "estate_config.json",
-    "final_config.json"
+    "internal/lookout/tools.go",
+    "web/src/main.tsx",
+    "web/src/app/App.tsx",
+    "web/package.json"
   ],
   "service_boundaries": {
-    "cli": "Builds and sends requests for config retrieval/push and related operator workflows.",
-    "templates": "Example or safe template edge config documents, not live secret carriers."
+    "cli_runtime": "Go/Cobra CLI for login, whoami, config get/set/push, message capture, and operator workflows over NATS.",
+    "web_shell": "React/Vite browser cockpit with shell layout, module registry, and read-first operator surfaces.",
+    "session_client": "Same-origin browser session boundary that opens Drawbridge auth, listens for callback completion, and refreshes session bootstrap state.",
+    "nats_browser_transport": "NATS over WebSocket browser rail used by the cockpit through /_/nats.",
+    "config_templates": "Tracked JSON files remain examples/templates rather than live estate truth."
   },
   "critical_invariants": [
     "Tracked JSON files are templates/examples, not live secret-bearing runtime configs.",
-    "Live edge config should come from generated runtime artifacts, then be pushed via Lookout.",
-    "Gateway JWT validation config should describe public-key verification, not private signing state."
+    "Live edge config should come from generated Stronghold runtime artifacts, then be pushed via Lookout.",
+    "The web cockpit assumes same-origin auth under /_/auth and NATS transport under /_/nats.",
+    "The browser shell must not depend on reading the HttpOnly auth cookie directly; it consumes bootstrap/session payloads instead.",
+    "Static module registration is intentional and keeps the cockpit structure stable without runtime plugin machinery."
   ],
   "known_risks": [
-    "Template drift from generated runtime config is possible if the bootstrap script changes and templates are not refreshed."
+    "Backend read surfaces for Sentry and Aegis remain partial, so much of the cockpit is structural/read-first rather than fully operational.",
+    "The browser transport depends on the /_/nats rail being exposed and accepting the current session.",
+    "No same-origin logout endpoint is exposed yet, so the cockpit can clear local hints without actually terminating the browser session cookie.",
+    "Template drift from generated runtime config is possible if bootstrap behavior changes and tracked examples are not refreshed."
   ],
   "read_order": [
+    "README.md",
+    "web/README.md",
+    "web/IMPLEMENTATION_NOTES.md",
+    "cmd/lookout/main.go",
+    "internal/lookout/doc.go",
+    "internal/lookout/tools.go",
+    "internal/lookout/bridge.go",
+    "web/src/main.tsx",
+    "web/src/app/App.tsx",
+    "web/src/lib/session/SessionProvider.tsx",
+    "web/src/lib/nats/NatsProvider.tsx",
+    "web/src/shell/module-registry.tsx",
+    "web/src/modules/overview/OverviewPage.tsx"
+  ],
+  "important_files": [
     "README.md",
     "cmd/lookout/main.go",
     "internal/lookout/doc.go",
     "internal/lookout/tools.go",
     "internal/lookout/bridge.go",
-    "estate_config.json",
-    "final_config.json",
-    "config.json"
-  ],
-  "important_files": [
-    "README.md",
-    "cmd/lookout/main.go",
-    "internal/lookout/tools.go",
-    "internal/lookout/bridge.go",
-    "estate_config.json",
-    "final_config.json",
-    "config.json"
+    "internal/version/version.go",
+    "web/README.md",
+    "web/IMPLEMENTATION_NOTES.md",
+    "web/package.json",
+    "web/src/app/App.tsx",
+    "web/src/lib/session/SessionProvider.tsx",
+    "web/src/lib/session/session-client.ts",
+    "web/src/lib/nats/NatsProvider.tsx",
+    "web/src/shell/module-registry.tsx",
+    "web/src/modules/overview/OverviewPage.tsx"
   ],
   "subsystems": {
-    "cli_entry": [
-      "cmd/lookout/main.go"
-    ],
-    "operator_logic": [
+    "cli_runtime": [
+      "cmd/lookout/main.go",
+      "internal/lookout/doc.go",
       "internal/lookout/tools.go",
       "internal/lookout/bridge.go",
-      "internal/lookout/doc.go"
-    ],
-    "versioning": [
       "internal/version/version.go"
+    ],
+    "web_shell_and_routing": [
+      "web/src/main.tsx",
+      "web/src/app/App.tsx",
+      "web/src/app/styles.css",
+      "web/src/shell/ShellLayout.tsx",
+      "web/src/shell/module-registry.tsx"
+    ],
+    "session_bootstrap_client": [
+      "web/src/lib/session/SessionProvider.tsx",
+      "web/src/lib/session/session-client.ts",
+      "web/src/lib/session/session-types.ts",
+      "web/src/env.ts"
+    ],
+    "nats_browser_transport": [
+      "web/src/lib/nats/NatsProvider.tsx",
+      "web/src/lib/nats/nats-types.ts",
+      "web/src/env.ts"
+    ],
+    "module_surfaces": [
+      "web/src/modules/overview/OverviewPage.tsx",
+      "web/src/modules/sentry/SentryPage.tsx",
+      "web/src/modules/aegis/AegisPage.tsx",
+      "web/src/lib/domain/sentry.ts",
+      "web/src/lib/domain/aegis.ts",
+      "web/src/components/ui/MetricCard.tsx",
+      "web/src/components/ui/Panel.tsx",
+      "web/src/components/ui/StatusPill.tsx"
     ],
     "config_templates": [
       "config.json",
@@ -68,18 +116,52 @@
     ]
   },
   "files": [
-    "README.md",
-    "estate_config.json",
-    "go.sum",
-    "final_config.json",
+    ".gitignore",
     "LICENSE",
-    "lookout",
-    "go.mod",
+    "README.md",
+    "REPO_MAP.json",
+    "cmd/.gitkeep",
     "cmd/lookout/main.go",
     "config.json",
-    "internal/version/version.go",
+    "estate_config.json",
+    "final_config.json",
+    "go.mod",
+    "go.sum",
     "internal/lookout/bridge.go",
     "internal/lookout/doc.go",
-    "internal/lookout/tools.go"
+    "internal/lookout/tools.go",
+    "internal/version/version.go",
+    "lookout",
+    "pkg/.gitkeep",
+    "ui/.gitkeep",
+    "web/IMPLEMENTATION_NOTES.md",
+    "web/README.md",
+    "web/index.html",
+    "web/package-lock.json",
+    "web/package.json",
+    "web/src/app/App.tsx",
+    "web/src/app/styles.css",
+    "web/src/components/ui/MetricCard.tsx",
+    "web/src/components/ui/Panel.tsx",
+    "web/src/components/ui/StatusPill.tsx",
+    "web/src/env.ts",
+    "web/src/lib/domain/aegis.ts",
+    "web/src/lib/domain/sentry.ts",
+    "web/src/lib/nats/NatsProvider.tsx",
+    "web/src/lib/nats/nats-types.ts",
+    "web/src/lib/session/SessionProvider.tsx",
+    "web/src/lib/session/session-client.ts",
+    "web/src/lib/session/session-types.ts",
+    "web/src/main.tsx",
+    "web/src/modules/aegis/AegisPage.tsx",
+    "web/src/modules/overview/OverviewPage.tsx",
+    "web/src/modules/sentry/SentryPage.tsx",
+    "web/src/shell/ShellLayout.tsx",
+    "web/src/shell/module-registry.tsx",
+    "web/src/vite-env.d.ts",
+    "web/tsconfig.app.json",
+    "web/tsconfig.json",
+    "web/tsconfig.node.json",
+    "web/vite.config.ts"
   ]
 }
