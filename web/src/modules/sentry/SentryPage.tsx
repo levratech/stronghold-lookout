@@ -28,29 +28,45 @@ export function SentryPage() {
           description="Authority details already visible to the shell."
           actions={
             <StatusPill
-              tone={snapshot.operator ? "success" : "warning"}
-              label={snapshot.operator ? "resolved" : "pending"}
+              tone={snapshot.activePrincipal ? "success" : "warning"}
+              label={snapshot.activePrincipal ? "resolved" : "pending"}
             />
           }
         >
           <div className="kv-grid">
             <div className="kv">
-              <div className="kv__label">Principal</div>
-              <div className="kv__value">{snapshot.operator?.principalId ?? "Unavailable"}</div>
+              <div className="kv__label">Root Principal</div>
+              <div className="kv__value">{snapshot.root?.principalId ?? "Unavailable"}</div>
+            </div>
+            <div className="kv">
+              <div className="kv__label">Active Principal</div>
+              <div className="kv__value">
+                {snapshot.activePrincipal?.principalId ?? "Unavailable"}
+              </div>
+            </div>
+            <div className="kv">
+              <div className="kv__label">Active Type</div>
+              <div className="kv__value">
+                {snapshot.activePrincipal?.principalType ?? "Unavailable"}
+              </div>
             </div>
             <div className="kv">
               <div className="kv__label">Domain</div>
-              <div className="kv__value">{snapshot.operator?.domainId ?? "Unavailable"}</div>
+              <div className="kv__value">
+                {snapshot.activePrincipal?.domainId ?? snapshot.root?.domainId ?? "Unavailable"}
+              </div>
             </div>
             <div className="kv">
               <div className="kv__label">Context</div>
-              <div className="kv__value">{snapshot.operator?.contextId ?? "Unavailable"}</div>
+              <div className="kv__value">
+                {snapshot.activePrincipal?.contextId ?? snapshot.root?.contextId ?? "Unavailable"}
+              </div>
             </div>
             <div className="kv">
               <div className="kv__label">Badges</div>
               <div className="kv__value">
-                {snapshot.operator?.badgeIds.length
-                  ? snapshot.operator.badgeIds.join(", ")
+                {snapshot.activePrincipal?.badgeIds.length
+                  ? snapshot.activePrincipal.badgeIds.join(", ")
                   : "No badge payload"}
               </div>
             </div>

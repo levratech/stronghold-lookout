@@ -86,6 +86,17 @@ export function NatsProvider({ children }: PropsWithChildren) {
       return;
     }
 
+    if (!snapshot.transport.ready) {
+      setState({
+        state: "disconnected",
+        detail: snapshot.transport.detail,
+        reconnects: 0,
+        connectedServer: undefined,
+        lastError: undefined,
+      });
+      return;
+    }
+
     setState((current) => ({
       ...current,
       state: "connecting",
@@ -97,7 +108,6 @@ export function NatsProvider({ children }: PropsWithChildren) {
       const connection = await connect({
         name: "Stronghold Lookout Web",
         servers: serverURL,
-        token: snapshot.natsAuthToken,
         maxReconnectAttempts: -1,
         reconnectTimeWait: 2_000,
       });
@@ -152,7 +162,7 @@ export function NatsProvider({ children }: PropsWithChildren) {
     return () => {
       disconnect();
     };
-  }, [snapshot.status, serverURL]);
+  }, [snapshot.status, snapshot.transport.ready, snapshot.transport.detail, serverURL]);
 
   return (
     <NatsContext.Provider

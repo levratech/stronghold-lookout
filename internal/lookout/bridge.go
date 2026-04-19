@@ -5,6 +5,8 @@
 package lookout
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -18,12 +20,16 @@ import (
 // and the current user's security context. This is the primary state container
 // for autonomous agents operating via the Lookout CLI.
 type Session struct {
-	nc        *nats.Conn
-	mu        sync.Mutex
-	BadgeIDs  []string
-	JWT       string
-	Captured  []string
-	maxCapture int
+	nc                *nats.Conn
+	mu                sync.Mutex
+	BadgeIDs          []string
+	JWT               string
+	RootPrincipalID   string
+	ActivePrincipalID string
+	PrincipalType     string
+	Context           string
+	Captured          []string
+	maxCapture        int
 }
 
 // NewSession initializes a global NATS connection using the NATS_URL environment variable.
@@ -151,17 +157,75 @@ func (s *Session) GetCaptured() []string {
 
 // PrincipalID returns a placeholder for now, as JWT/Badge logic will be implemented.
 func (s *Session) PrincipalID() string {
-	if len(s.BadgeIDs) > 0 {
-		return s.BadgeIDs[0]
+	if strings.TrimSpace(s.ActivePrincipalID) != "" {
+		return s.ActivePrincipalID
 	}
 	return "unknown"
 }
 
 // ContextID returns the connection ID.
 func (s *Session) ContextID() string {
+	if strings.TrimSpace(s.Context) != "" {
+		return s.Context
+	}
 	id, err := s.nc.GetClientID()
 	if err != nil {
 		return "disconnected"
 	}
 	return fmt.Sprintf("%d", id)
+}
+
+func (s *Session) RootID() string {
+	if strings.TrimSpace(s.RootPrincipalID) != "" {
+		return s.RootPrincipalID
+	}
+	return "unknown"
+}
+
+func (s *Session) AdoptJWT(token string) {
+	s.JWT = token
+
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return
+	}
+
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return
+	}
+
+	var claims map[string]any
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return
+	}
+
+	if value, ok := claims["active_principal_id"].(string); ok && value != "" {
+		s.ActivePrincipalID = value
+	}
+	if value, ok := claims["principal_id"].(string); ok && value != "" && s.ActivePrincipalID == "" {
+		s.ActivePrincipalID = value
+	}
+	if value, ok := claims["root_principal_id"].(string); ok && value != "" {
+		s.RootPrincipalID = value
+	}
+	if s.RootPrincipalID == "" {
+		s.RootPrincipalID = s.ActivePrincipalID
+	}
+	if value, ok := claims["principal_type"].(string); ok {
+		s.PrincipalType = value
+	}
+	if value, ok := claims["context_id"].(string); ok {
+		s.Context = value
+	}
+
+	switch badgeIDs := claims["badge_ids"].(type) {
+	case []any:
+		s.BadgeIDs = s.BadgeIDs[:0]
+		for _, item := range badgeIDs {
+			if badge, ok := item.(string); ok {
+				s.BadgeIDs = append(s.BadgeIDs, badge)
+			}
+		}
+	}
 }

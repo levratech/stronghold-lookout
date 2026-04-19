@@ -9,9 +9,9 @@ export interface SentrySection {
 }
 
 export function buildSentrySections(snapshot: SessionSnapshot): SentrySection[] {
-  const identityDetail = snapshot.operator
-    ? `Principal ${snapshot.operator.principalId ?? "unknown"} is the current operator context.`
-    : "No operator identity payload is exposed to the web shell yet.";
+  const identityDetail = snapshot.activePrincipal
+    ? `Active principal ${snapshot.activePrincipal.principalId ?? "unknown"} is the current operator context.`
+    : "No active principal payload is exposed to the web shell yet.";
 
   return [
     {
@@ -26,9 +26,9 @@ export function buildSentrySections(snapshot: SessionSnapshot): SentrySection[] 
       key: "badges",
       title: "Badges",
       summary: "Badge inventory, role semantics, and authority labels.",
-      status: snapshot.operator?.badgeIds.length ? "live" : "planned",
-      detail: snapshot.operator?.badgeIds.length
-        ? `Current session advertises ${snapshot.operator.badgeIds.length} badge value(s) through session state.`
+      status: snapshot.activePrincipal?.badgeIds.length ? "live" : "planned",
+      detail: snapshot.activePrincipal?.badgeIds.length
+        ? `Current session advertises ${snapshot.activePrincipal.badgeIds.length} badge value(s) through active principal state.`
         : "Badge management actions are not faked here; the shell only reports badge values when session bootstrap exposes them.",
     },
     {
@@ -43,7 +43,7 @@ export function buildSentrySections(snapshot: SessionSnapshot): SentrySection[] 
       key: "session",
       title: "Session Context",
       summary: "Operator identity and active authority context.",
-      status: snapshot.operator ? "live" : "planned",
+      status: snapshot.activePrincipal ? "live" : "planned",
       detail: identityDetail,
     },
   ];

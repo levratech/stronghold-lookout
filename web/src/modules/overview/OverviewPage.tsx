@@ -38,7 +38,8 @@ export function OverviewPage() {
   const { snapshot } = useSession();
   const nats = useNats();
 
-  const operator = snapshot.operator;
+  const root = snapshot.root;
+  const activePrincipal = snapshot.activePrincipal;
 
   return (
     <div className="page">
@@ -62,9 +63,9 @@ export function OverviewPage() {
           status={<StatusPill tone={sessionTone(snapshot.status)} label={snapshot.source} />}
         />
         <MetricCard
-          eyebrow="Operator"
-          value={operator?.email ?? operator?.principalId ?? "Not resolved"}
-          detail="Current operator identity, when exposed by the auth bootstrap."
+          eyebrow="Active Principal"
+          value={activePrincipal?.email ?? activePrincipal?.principalId ?? "Not resolved"}
+          detail="Current active authority context exposed through same-origin session bootstrap."
         />
         <MetricCard
           eyebrow="NATS WebSocket"
@@ -88,24 +89,42 @@ export function OverviewPage() {
         >
           <div className="kv-grid">
             <div className="kv">
-              <div className="kv__label">Principal</div>
-              <div className="kv__value">{operator?.principalId ?? "Unavailable"}</div>
+              <div className="kv__label">Root Principal</div>
+              <div className="kv__value">{root?.principalId ?? "Unavailable"}</div>
             </div>
             <div className="kv">
-              <div className="kv__label">Email</div>
-              <div className="kv__value">{operator?.email ?? "Unavailable"}</div>
+              <div className="kv__label">Active Principal</div>
+              <div className="kv__value">{activePrincipal?.principalId ?? "Unavailable"}</div>
+            </div>
+            <div className="kv">
+              <div className="kv__label">Root Type</div>
+              <div className="kv__value">{root?.principalType ?? "Unavailable"}</div>
+            </div>
+            <div className="kv">
+              <div className="kv__label">Active Type</div>
+              <div className="kv__value">{activePrincipal?.principalType ?? "Unavailable"}</div>
             </div>
             <div className="kv">
               <div className="kv__label">Domain</div>
-              <div className="kv__value">{operator?.domainId ?? "Unavailable"}</div>
+              <div className="kv__value">
+                {activePrincipal?.domainId ?? root?.domainId ?? "Unavailable"}
+              </div>
             </div>
             <div className="kv">
               <div className="kv__label">Context</div>
-              <div className="kv__value">{operator?.contextId ?? "Unavailable"}</div>
+              <div className="kv__value">
+                {activePrincipal?.contextId ?? root?.contextId ?? "Unavailable"}
+              </div>
             </div>
             <div className="kv">
               <div className="kv__label">Realm</div>
-              <div className="kv__value">{operator?.realmId ?? "Unavailable"}</div>
+              <div className="kv__value">
+                {activePrincipal?.realmId ?? root?.realmId ?? "Unavailable"}
+              </div>
+            </div>
+            <div className="kv">
+              <div className="kv__label">Interface</div>
+              <div className="kv__value">{root?.interfaceId ?? "Unavailable"}</div>
             </div>
             <div className="kv">
               <div className="kv__label">Session Validity</div>
@@ -115,14 +134,14 @@ export function OverviewPage() {
 
           <div>
             <div className="kv__label">Badges / Roles</div>
-            {operator?.badgeIds.length || operator?.roles.length ? (
+            {activePrincipal?.badgeIds.length || activePrincipal?.roles.length ? (
               <div className="tag-row">
-                {operator.badgeIds.map((badge) => (
+                {activePrincipal?.badgeIds.map((badge) => (
                   <span className="tag" key={badge}>
                     badge:{badge}
                   </span>
                 ))}
-                {operator.roles.map((role) => (
+                {activePrincipal?.roles.map((role) => (
                   <span className="tag" key={role}>
                     role:{role}
                   </span>
@@ -144,9 +163,17 @@ export function OverviewPage() {
         >
           <div className="kv-grid">
             <div className="kv">
+              <div className="kv__label">Declared Rail</div>
+              <div className="kv__value">{snapshot.transport.mode ?? "Unavailable"}</div>
+            </div>
+            <div className="kv">
+              <div className="kv__label">Session Ready</div>
+              <div className="kv__value">{String(snapshot.transport.ready)}</div>
+            </div>
+            <div className="kv">
               <div className="kv__label">NATS Endpoint</div>
               <div className="kv__value">
-                <code>{nats.serverURL}</code>
+                <code>{snapshot.transport.path ?? nats.serverURL}</code>
               </div>
             </div>
             <div className="kv">
@@ -162,6 +189,7 @@ export function OverviewPage() {
               <div className="kv__value">{nats.lastError ?? "None reported"}</div>
             </div>
           </div>
+          <div className="empty-state">{snapshot.transport.detail}</div>
         </Panel>
       </section>
 
@@ -206,8 +234,9 @@ export function OverviewPage() {
               <div>
                 <div className="list-item__title">Missing Backend Surface</div>
                 <div className="list-item__body">
-                  No session bootstrap endpoint currently exposes operator identity to the web
-                  shell, and no browser-safe Aegis or Sentry read subjects are surfaced yet.
+                  The session bootstrap now exposes root and active principal metadata, but
+                  browser transport credentialing remains intentionally unfinished so reusable
+                  transport secrets do not leak into JavaScript.
                 </div>
               </div>
             </div>

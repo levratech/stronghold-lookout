@@ -102,10 +102,8 @@ func loginCmd() *cobra.Command {
 				}
 			}
 
-			session.JWT = resp.Token
+			session.AdoptJWT(resp.Token)
 			fmt.Printf("JWT: %s\n", session.JWT)
-			// Mocked BadgeID extraction for Phase 2
-			session.BadgeIDs = []string{email}
 			fmt.Println("Login successful. Welcome back to the estate.")
 		},
 	}
@@ -210,8 +208,10 @@ func whoamiCmd() *cobra.Command {
 		Use:   "whoami",
 		Short: "Displays current session information",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("PrincipalID: %s\n", session.PrincipalID())
-			fmt.Printf("ContextID:   %s\n", session.ContextID())
+			fmt.Printf("RootPrincipalID:   %s\n", session.RootID())
+			fmt.Printf("ActivePrincipalID: %s\n", session.PrincipalID())
+			fmt.Printf("PrincipalType:     %s\n", session.PrincipalType)
+			fmt.Printf("ContextID:         %s\n", session.ContextID())
 		},
 	}
 }

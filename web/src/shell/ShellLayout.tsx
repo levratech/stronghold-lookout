@@ -37,13 +37,17 @@ function natsTone(status: string) {
 export function ShellLayout() {
   const { snapshot, login, logout, refresh } = useSession();
   const nats = useNats();
+  const activePrincipal = snapshot.activePrincipal;
+  const root = snapshot.root;
 
   const operatorSummary =
-    snapshot.operator?.email ??
-    snapshot.operator?.principalId ??
-    (snapshot.status === "authenticated" ? "Authenticated operator" : "No resolved operator");
-  const badgeSummary = snapshot.operator?.badgeIds.length
-    ? `${snapshot.operator.badgeIds.length} badge(s)`
+    activePrincipal?.email ??
+    activePrincipal?.principalId ??
+    root?.email ??
+    root?.principalId ??
+    (snapshot.status === "authenticated" ? "Authenticated session" : "No resolved session");
+  const badgeSummary = activePrincipal?.badgeIds.length
+    ? `${activePrincipal.badgeIds.length} badge(s)`
     : "No badge payload";
 
   return (
@@ -67,7 +71,11 @@ export function ShellLayout() {
               <StatusPill tone={sessionTone(snapshot.status)} label={snapshot.status} />
             </div>
             <div className="meta-card__value">{operatorSummary}</div>
-            <div className="meta-card__label">{badgeSummary}</div>
+            <div className="meta-card__label">
+              {root?.principalId && activePrincipal?.principalId && root.principalId !== activePrincipal.principalId
+                ? `Root ${root.principalId} -> active ${activePrincipal.principalId}`
+                : badgeSummary}
+            </div>
           </div>
 
           <div className="meta-card">
