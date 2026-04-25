@@ -6,8 +6,11 @@ import {
   AuthorityReadError,
   readAccounts,
   readBadgeDefinitions,
+  readBadgeGrants,
   readContexts,
   readIdentities,
+  readPrincipalKeys,
+  readPrincipals,
 } from "../../lib/authority/authority-client";
 import type {
   AccountReadModel,
@@ -15,6 +18,9 @@ import type {
   BadgeDefinitionReadModel,
   ContextReadModel,
   IdentityReadModel,
+  PrincipalBadgeGrantReadModel,
+  PrincipalKeyReadModel,
+  PrincipalReadModel,
 } from "../../lib/authority/authority-types";
 import { lookoutModules, type LookoutModuleDefinition } from "../../shell/module-registry";
 
@@ -87,6 +93,9 @@ type LiveReadState =
       contexts: ContextReadModel[];
       identities: IdentityReadModel[];
       badges: BadgeDefinitionReadModel[];
+      principals: PrincipalReadModel[];
+      grants: PrincipalBadgeGrantReadModel[];
+      keys: PrincipalKeyReadModel[];
     }
   | {
       status: AuthorityLoadStatus;
@@ -95,6 +104,9 @@ type LiveReadState =
       contexts: ContextReadModel[];
       identities: IdentityReadModel[];
       badges: BadgeDefinitionReadModel[];
+      principals: PrincipalReadModel[];
+      grants: PrincipalBadgeGrantReadModel[];
+      keys: PrincipalKeyReadModel[];
     };
 
 function statusTone(status: AuthorityLoadStatus) {
@@ -122,13 +134,19 @@ function liveSurfaceLabel(moduleId: string) {
       return "Context Tree";
     case "badges":
       return "Badge Catalog";
+    case "principals":
+      return "Principal Lineage";
+    case "grants":
+      return "Badge Grants";
+    case "keys":
+      return "Key Posture";
     default:
       return "";
   }
 }
 
 function isLiveReadSurface(moduleId: string) {
-  return ["accounts", "identities", "contexts", "badges"].includes(moduleId);
+  return ["accounts", "identities", "contexts", "badges", "principals", "grants", "keys"].includes(moduleId);
 }
 
 export function AuthorityPlaceholderPage() {
@@ -141,6 +159,9 @@ export function AuthorityPlaceholderPage() {
     contexts: [],
     identities: [],
     badges: [],
+    principals: [],
+    grants: [],
+    keys: [],
   });
 
   useEffect(() => {
@@ -152,6 +173,9 @@ export function AuthorityPlaceholderPage() {
         contexts: [],
         identities: [],
         badges: [],
+        principals: [],
+        grants: [],
+        keys: [],
       });
       return;
     }
@@ -164,6 +188,9 @@ export function AuthorityPlaceholderPage() {
       contexts: [],
       identities: [],
       badges: [],
+      principals: [],
+      grants: [],
+      keys: [],
     });
 
     async function load() {
@@ -179,6 +206,9 @@ export function AuthorityPlaceholderPage() {
             contexts: [],
             identities: [],
             badges: [],
+            principals: [],
+            grants: [],
+            keys: [],
           });
           return;
         }
@@ -194,6 +224,9 @@ export function AuthorityPlaceholderPage() {
             contexts: [],
             identities: response.items,
             badges: [],
+            principals: [],
+            grants: [],
+            keys: [],
           });
           return;
         }
@@ -209,20 +242,80 @@ export function AuthorityPlaceholderPage() {
             contexts: response.items,
             identities: [],
             badges: [],
+            principals: [],
+            grants: [],
+            keys: [],
           });
           return;
         }
 
-        const response = await readBadgeDefinitions(controller.signal, { limit: 100 });
+        if (module?.id === "badges") {
+          const response = await readBadgeDefinitions(controller.signal, { limit: 100 });
+          setReadState({
+            status: response.items.length ? "ready" : "empty",
+            detail: response.items.length
+              ? "Badge definitions loaded through Sentry authority reads."
+              : "No badge definitions were returned for this session scope.",
+            accounts: [],
+            contexts: [],
+            identities: [],
+            badges: response.items,
+            principals: [],
+            grants: [],
+            keys: [],
+          });
+          return;
+        }
+
+        if (module?.id === "principals") {
+          const response = await readPrincipals(controller.signal, { limit: 100 });
+          setReadState({
+            status: response.items.length ? "ready" : "empty",
+            detail: response.items.length
+              ? "Principals loaded through Sentry authority reads."
+              : "No principals were returned for this session scope.",
+            accounts: [],
+            contexts: [],
+            identities: [],
+            badges: [],
+            principals: response.items,
+            grants: [],
+            keys: [],
+          });
+          return;
+        }
+
+        if (module?.id === "grants") {
+          const response = await readBadgeGrants(controller.signal, { limit: 100 });
+          setReadState({
+            status: response.items.length ? "ready" : "empty",
+            detail: response.items.length
+              ? "Badge grants loaded through Sentry authority reads."
+              : "No badge grants were returned for this session scope.",
+            accounts: [],
+            contexts: [],
+            identities: [],
+            badges: [],
+            principals: [],
+            grants: response.items,
+            keys: [],
+          });
+          return;
+        }
+
+        const response = await readPrincipalKeys(controller.signal, { limit: 100 });
         setReadState({
           status: response.items.length ? "ready" : "empty",
           detail: response.items.length
-            ? "Badge definitions loaded through Sentry authority reads."
-            : "No badge definitions were returned for this session scope.",
+            ? "Principal key posture loaded through Sentry authority reads."
+            : "No principal keys were returned for this session scope.",
           accounts: [],
           contexts: [],
           identities: [],
-          badges: response.items,
+          badges: [],
+          principals: [],
+          grants: [],
+          keys: response.items,
         });
       } catch (error) {
         if (controller.signal.aborted) {
@@ -238,6 +331,9 @@ export function AuthorityPlaceholderPage() {
           contexts: [],
           identities: [],
           badges: [],
+          principals: [],
+          grants: [],
+          keys: [],
         });
       }
     }
@@ -277,8 +373,14 @@ export function AuthorityPlaceholderPage() {
               <IdentityList identities={readState.identities} />
             ) : module.id === "contexts" ? (
               <ContextList contexts={readState.contexts} />
-            ) : (
+            ) : module.id === "badges" ? (
               <BadgeList badges={readState.badges} />
+            ) : module.id === "principals" ? (
+              <PrincipalList principals={readState.principals} />
+            ) : module.id === "grants" ? (
+              <GrantList grants={readState.grants} />
+            ) : (
+              <KeyList keys={readState.keys} />
             )}
           </Panel>
         ) : null}
@@ -312,6 +414,88 @@ export function AuthorityPlaceholderPage() {
           </div>
         </Panel>
       </section>
+    </div>
+  );
+}
+
+function PrincipalList({ principals }: { principals: PrincipalReadModel[] }) {
+  if (!principals.length) {
+    return <div className="empty-state">No principal records are visible yet.</div>;
+  }
+
+  return (
+    <div className="list">
+      {principals.map((principal) => (
+        <div className="list-item" key={principal.id}>
+          <div>
+            <div className="list-item__title">{principal.id}</div>
+            <div className="list-item__body">
+              type:{principal.principal_type} · context:{principal.context_id} · account:
+              {principal.account_id ?? "none"}
+            </div>
+            <div className="list-item__body">
+              minted by:{principal.minted_by_principal_id ?? "authority"} · authority root:
+              {principal.authority_root_principal_id ?? "self"}
+            </div>
+          </div>
+          <StatusPill
+            tone={principal.revoked_at ? "danger" : principal.is_ephemeral ? "warning" : "success"}
+            label={principal.revoked_at ? "revoked" : principal.is_ephemeral ? "ephemeral" : "durable"}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GrantList({ grants }: { grants: PrincipalBadgeGrantReadModel[] }) {
+  if (!grants.length) {
+    return <div className="empty-state">No badge grants are visible yet.</div>;
+  }
+
+  return (
+    <div className="list">
+      {grants.map((grant) => (
+        <div className="list-item" key={grant.id}>
+          <div>
+            <div className="list-item__title">{grant.principal_id}</div>
+            <div className="list-item__body">
+              badge:{grant.badge_id} · context:{grant.context_id} · permission:{grant.permission}
+            </div>
+            <div className="list-item__body">
+              granted by:{grant.granted_by_principal_id ?? "authority"} · reason:
+              {grant.reason ?? "not recorded"}
+            </div>
+          </div>
+          <StatusPill tone={grant.revoked_at ? "danger" : "success"} label={grant.revoked_at ? "revoked" : "active"} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function KeyList({ keys }: { keys: PrincipalKeyReadModel[] }) {
+  if (!keys.length) {
+    return <div className="empty-state">No principal keys are visible yet.</div>;
+  }
+
+  return (
+    <div className="list">
+      {keys.map((key) => (
+        <div className="list-item" key={key.id}>
+          <div>
+            <div className="list-item__title">{key.key_id}</div>
+            <div className="list-item__body">
+              principal:{key.principal_id} · algorithm:{key.algorithm} · status:{key.status}
+            </div>
+            <div className="list-item__body">
+              created:{key.created_at ?? "unknown"} · expires:{key.expires_at ?? "not set"} · revoked:
+              {key.revoked_at ?? "no"}
+            </div>
+          </div>
+          <StatusPill tone={key.revoked_at || key.status !== "active" ? "warning" : "success"} label={key.status || "unknown"} />
+        </div>
+      ))}
     </div>
   );
 }
