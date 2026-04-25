@@ -4,28 +4,28 @@
 
 - A new `web/` boundary inside `stronghold-lookout` using React, TypeScript, and Vite.
 - A shell-first cockpit with top bar, left navigation, and module mounting.
-- Static module registration for Overview, Sentry, and Aegis.
+- Static module registration for Overview, Sentry, Aegis, and authority cockpit surfaces.
 - A session provider centered on same-origin auth behavior under `/_/auth`.
 - A shared NATS WebSocket provider centered on `/_/nats`.
-- Read-first Overview, Sentry, and Aegis surfaces with clear state handling.
+- Read-first Overview, Sentry, Aegis, authority graph, badge, key, and audit surfaces with clear state handling.
 
 ## What Is Real Now
 
 - Same-origin auth flow shape under `/_/auth` matches the existing Drawbridge behavior.
+- `/_/auth/session` exposes operator identity, root/active principal posture, context, badge summary, and transport readiness metadata without exposing the HttpOnly cookie value.
 - The shell listens for Drawbridge auth completion via `postMessage`.
-- The NATS client is real and attempts a browser connection over `/_/nats`.
-- The shell, layout, module boundaries, and shared providers are production-shaped.
+- The NATS client is real, but it only attempts a browser connection when session bootstrap reports `transport.ready=true`.
+- The shell, layout, module boundaries, authority reads, controlled mutations, and shared providers are production-shaped.
 
 ## What Is Placeholder Or Pending Backend Support
 
-- No same-origin session bootstrap endpoint currently exposes operator identity or session detail to the browser shell.
-- No browser-safe Sentry read surface currently lists users, badges, or assignments.
+- Browser transport remains intentionally pending until the Phase 7 browser NATS authorization model is implemented in Aegis.
 - No browser-safe Aegis read surface currently exposes interfaces, routes, or live config state.
 - The tracked JSON files in this repo are not used as live estate truth.
 
 ## Backend Surfaces Needed Next
 
-1. Expose a same-origin session bootstrap endpoint such as `/_/auth/session` that returns current operator identity, badge data, context, and validity state without requiring the browser to read the `HttpOnly` token directly.
-2. Expose the intended `/_/nats` same-origin rail in the estate ingress so the browser transport can connect consistently in production.
-3. Add explicit Sentry read adapters for user list, badge list, user detail, and assignment inspection.
-4. Add explicit Aegis read adapters for interface listing, route inspection, access requirements, and live config provenance/status.
+1. Implement the Aegis-mediated browser NATS rail described in `stronghold/docs/browser-nats-authorization-model.md`; do not pass reusable NATS credentials to the browser.
+2. Flip session bootstrap `transport.ready=true` only after the Aegis rail validates sessions, keeps upstream credentials server-side, and passes negative subject-policy tests.
+3. Add explicit Aegis read adapters for interface listing, route inspection, access requirements, and live config provenance/status.
+4. Expand verified command envelope coverage before sensitive browser-originated commands move onto the transport rail.

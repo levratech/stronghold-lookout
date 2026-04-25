@@ -28,7 +28,7 @@
     "session_client": "Same-origin browser session boundary that opens Drawbridge auth, listens for callback completion, refreshes /_/auth/session, calls same-origin logout, and normalizes separate root and active principal metadata.",
     "authority_read_client": "Typed same-origin HTTP client for Sentry authority read surfaces under /_/authority/read without browser-visible transport credentials, including badge archive state, grant provenance, key posture, and authority audit-event readback.",
     "authority_mutation_client": "Typed same-origin HTTP client for controlled Sentry authority mutations under /_/authority/mutate with idempotency keys and operator confirmation states, including badge-definition, principal-badge grant, and principal-key lifecycle controls.",
-    "nats_browser_transport": "NATS over WebSocket browser rail used by the cockpit through /_/nats only when a future session-backed transport path is marked ready; the current shell reports transport posture honestly without passing raw secrets.",
+    "nats_browser_transport": "NATS over WebSocket browser rail used by the cockpit through /_/nats only when the Aegis-mediated browser NATS authorization model is implemented and marked ready; the current shell reports transport posture honestly without passing raw secrets.",
     "config_templates": "Tracked JSON files remain examples/templates rather than live estate truth."
   },
   "critical_invariants": [
@@ -43,7 +43,7 @@
   ],
   "known_risks": [
     "Authority cockpit reads depend on Sentry same-origin HTTP adapters and Aegis-projected identity headers; if the live edge config does not project those headers, authorized sessions can still be denied.",
-    "The browser transport depends on the /_/nats rail being exposed and on Stronghold landing a finalized session-backed credentialing path.",
+    "The browser transport depends on the /_/nats rail being exposed through the Aegis-mediated browser authorization model; raw NATS credentials must remain server-side.",
     "Audit reads currently surface key lifecycle mutation evidence; broader mutation/session auditing and transport commands remain intentionally deferred.",
     "Template drift from generated runtime config is possible if bootstrap behavior changes and tracked examples are not refreshed.",
     "Repo documentation still needs cleanup where older prose says no session bootstrap exists or says clients are unimplemented; the map reflects the current code, not those stale lines.",
