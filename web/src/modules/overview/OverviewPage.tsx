@@ -40,6 +40,9 @@ export function OverviewPage() {
 
   const root = snapshot.root;
   const activePrincipal = snapshot.activePrincipal;
+  const account = snapshot.account;
+  const identity = snapshot.identity;
+  const context = snapshot.context;
 
   return (
     <div className="page">
@@ -97,6 +100,21 @@ export function OverviewPage() {
               <div className="kv__value">{activePrincipal?.principalId ?? "Unavailable"}</div>
             </div>
             <div className="kv">
+              <div className="kv__label">Account</div>
+              <div className="kv__value">
+                {account?.accountId ?? activePrincipal?.accountId ?? root?.accountId ?? "Unavailable"}
+              </div>
+            </div>
+            <div className="kv">
+              <div className="kv__label">Identity</div>
+              <div className="kv__value">
+                {identity?.identityId ??
+                  activePrincipal?.identityId ??
+                  root?.identityId ??
+                  "Unavailable"}
+              </div>
+            </div>
+            <div className="kv">
               <div className="kv__label">Root Type</div>
               <div className="kv__value">{root?.principalType ?? "Unavailable"}</div>
             </div>
@@ -107,24 +125,29 @@ export function OverviewPage() {
             <div className="kv">
               <div className="kv__label">Domain</div>
               <div className="kv__value">
-                {activePrincipal?.domainId ?? root?.domainId ?? "Unavailable"}
+                {context?.domainId ?? activePrincipal?.domainId ?? root?.domainId ?? "Unavailable"}
               </div>
             </div>
             <div className="kv">
               <div className="kv__label">Context</div>
               <div className="kv__value">
-                {activePrincipal?.contextId ?? root?.contextId ?? "Unavailable"}
+                {context?.contextId ??
+                  activePrincipal?.contextId ??
+                  root?.contextId ??
+                  "Unavailable"}
               </div>
             </div>
             <div className="kv">
               <div className="kv__label">Realm</div>
               <div className="kv__value">
-                {activePrincipal?.realmId ?? root?.realmId ?? "Unavailable"}
+                {context?.realmId ?? activePrincipal?.realmId ?? root?.realmId ?? "Unavailable"}
               </div>
             </div>
             <div className="kv">
               <div className="kv__label">Interface</div>
-              <div className="kv__value">{root?.interfaceId ?? "Unavailable"}</div>
+              <div className="kv__value">
+                {context?.interfaceId ?? root?.interfaceId ?? "Unavailable"}
+              </div>
             </div>
             <div className="kv">
               <div className="kv__label">Session Validity</div>
@@ -134,9 +157,9 @@ export function OverviewPage() {
 
           <div>
             <div className="kv__label">Badges / Roles</div>
-            {activePrincipal?.badgeIds.length || activePrincipal?.roles.length ? (
+            {snapshot.badgeSummary.count || activePrincipal?.roles.length ? (
               <div className="tag-row">
-                {activePrincipal?.badgeIds.map((badge) => (
+                {snapshot.badgeSummary.badgeIds.map((badge) => (
                   <span className="tag" key={badge}>
                     badge:{badge}
                   </span>

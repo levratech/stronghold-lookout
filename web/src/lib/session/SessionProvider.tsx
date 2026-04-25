@@ -19,8 +19,15 @@ import type { SessionContextValue, SessionSnapshot } from "./session-types";
 const defaultSnapshot: SessionSnapshot = {
   status: "loading",
   source: "unknown",
+  account: null,
+  identity: null,
+  context: null,
   root: null,
   activePrincipal: null,
+  badgeSummary: {
+    badgeIds: [],
+    count: 0,
+  },
   transport: {
     path: lookoutEnvironment.natsPath,
     mode: "session_backed",
@@ -56,8 +63,15 @@ export function SessionProvider({ children }: PropsWithChildren) {
       setSnapshot({
         status: "error",
         source: "unknown",
+        account: null,
+        identity: null,
+        context: null,
         root: null,
         activePrincipal: null,
+        badgeSummary: {
+          badgeIds: [],
+          count: 0,
+        },
         transport: defaultSnapshot.transport,
         detail: `Session bootstrap failed: ${detail}`,
       });
@@ -87,8 +101,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
       setSnapshot({
         status: "authenticated",
         source: "callback",
+        account: snapshot.account,
+        identity: snapshot.identity,
+        context: snapshot.context,
         root: snapshot.root,
         activePrincipal: snapshot.activePrincipal,
+        badgeSummary: snapshot.badgeSummary,
         transport: snapshot.transport,
         detail:
           "Drawbridge completed the auth flow and stored the session cookie. Revalidating bootstrap state.",
@@ -105,8 +123,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
     setSnapshot({
       status: "authenticating",
       source: "unknown",
+      account: snapshot.account,
+      identity: snapshot.identity,
+      context: snapshot.context,
       root: snapshot.root,
       activePrincipal: snapshot.activePrincipal,
+      badgeSummary: snapshot.badgeSummary,
       transport: snapshot.transport,
       detail: `Opening ${lookoutEnvironment.authProvider} login through the same-origin auth bridge.`,
     });
@@ -119,8 +141,15 @@ export function SessionProvider({ children }: PropsWithChildren) {
     setSnapshot({
       status: "unauthenticated",
       source: "unknown",
+      account: null,
+      identity: null,
+      context: null,
       root: null,
       activePrincipal: null,
+      badgeSummary: {
+        badgeIds: [],
+        count: 0,
+      },
       transport: defaultSnapshot.transport,
       detail:
         "Cleared the cockpit's local auth hint. No same-origin logout endpoint is exposed yet, so the browser session itself may still exist.",

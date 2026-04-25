@@ -24,8 +24,14 @@ function normalizeIdentity(raw: Record<string, unknown> | null | undefined) {
   const principalType = normalizePrincipalType(raw.principal_type);
 
   return {
+    accountId: typeof raw.account_id === "string" ? raw.account_id : undefined,
+    identityId: typeof raw.identity_id === "string" ? raw.identity_id : undefined,
     principalId: typeof raw.principal_id === "string" ? raw.principal_id : undefined,
     principalType,
+    authorityRootPrincipalId:
+      typeof raw.authority_root_principal_id === "string"
+        ? raw.authority_root_principal_id
+        : undefined,
     domainId: typeof raw.domain_id === "string" ? raw.domain_id : undefined,
     contextId: typeof raw.context_id === "string" ? raw.context_id : undefined,
     realmId: typeof raw.realm_id === "string" ? raw.realm_id : undefined,
@@ -62,8 +68,15 @@ export async function fetchSessionSnapshot(signal?: AbortSignal): Promise<Sessio
     return {
       status: "unauthenticated",
       source: "bootstrap",
+      account: null,
+      identity: null,
+      context: null,
       root: null,
       activePrincipal: null,
+      badgeSummary: {
+        badgeIds: [],
+        count: 0,
+      },
       transport: {
         ...defaultTransport,
         path: lookoutEnvironment.natsPath,
@@ -80,8 +93,15 @@ export async function fetchSessionSnapshot(signal?: AbortSignal): Promise<Sessio
     return {
       status: "degraded",
       source: "bootstrap",
+      account: null,
+      identity: null,
+      context: null,
       root: null,
       activePrincipal: null,
+      badgeSummary: {
+        badgeIds: [],
+        count: 0,
+      },
       transport: {
         ...defaultTransport,
         path: lookoutEnvironment.natsPath,
@@ -105,12 +125,55 @@ export async function fetchSessionSnapshot(signal?: AbortSignal): Promise<Sessio
     payload.transport && typeof payload.transport === "object"
       ? (payload.transport as Record<string, unknown>)
       : null;
+  const rawAccount =
+    payload.account && typeof payload.account === "object"
+      ? (payload.account as Record<string, unknown>)
+      : null;
+  const rawContext =
+    payload.context && typeof payload.context === "object"
+      ? (payload.context as Record<string, unknown>)
+      : null;
+  const rawBadgeSummary =
+    payload.badge_summary && typeof payload.badge_summary === "object"
+      ? (payload.badge_summary as Record<string, unknown>)
+      : null;
+  const badgeIds = Array.isArray(rawBadgeSummary?.badge_ids)
+    ? rawBadgeSummary.badge_ids.filter((value): value is string => typeof value === "string")
+    : activePrincipal?.badgeIds ?? root?.badgeIds ?? [];
 
   return {
     status: "authenticated",
     source: "bootstrap",
+    account: rawAccount
+      ? {
+          accountId:
+            typeof rawAccount.account_id === "string" ? rawAccount.account_id : undefined,
+          userId: typeof rawAccount.user_id === "string" ? rawAccount.user_id : undefined,
+          domainId:
+            typeof rawAccount.domain_id === "string" ? rawAccount.domain_id : undefined,
+        }
+      : null,
+    identity: normalizeIdentity(
+      payload.identity && typeof payload.identity === "object"
+        ? (payload.identity as Record<string, unknown>)
+        : null,
+    ),
+    context: rawContext
+      ? {
+          contextId:
+            typeof rawContext.context_id === "string" ? rawContext.context_id : undefined,
+          realmId: typeof rawContext.realm_id === "string" ? rawContext.realm_id : undefined,
+          domainId: typeof rawContext.domain_id === "string" ? rawContext.domain_id : undefined,
+          interfaceId:
+            typeof rawContext.interface_id === "string" ? rawContext.interface_id : undefined,
+        }
+      : null,
     root,
     activePrincipal,
+    badgeSummary: {
+      badgeIds,
+      count: typeof rawBadgeSummary?.count === "number" ? rawBadgeSummary.count : badgeIds.length,
+    },
     validUntil: typeof payload.valid_until === "string" ? payload.valid_until : undefined,
     transport: {
       path:
@@ -149,8 +212,15 @@ export function sessionHintSnapshot(): SessionSnapshot {
     return {
       status: "authenticated",
       source: "local-hint",
+      account: null,
+      identity: null,
+      context: null,
       root: null,
       activePrincipal: null,
+      badgeSummary: {
+        badgeIds: [],
+        count: 0,
+      },
       transport: {
         ...defaultTransport,
         path: lookoutEnvironment.natsPath,
@@ -163,8 +233,15 @@ export function sessionHintSnapshot(): SessionSnapshot {
   return {
     status: "degraded",
     source: "unknown",
+    account: null,
+    identity: null,
+    context: null,
     root: null,
     activePrincipal: null,
+    badgeSummary: {
+      badgeIds: [],
+      count: 0,
+    },
     transport: {
       ...defaultTransport,
       path: lookoutEnvironment.natsPath,
