@@ -28,7 +28,7 @@
     "session_client": "Same-origin browser session boundary that opens Drawbridge auth, listens for callback completion, refreshes /_/auth/session, calls same-origin logout, normalizes separate root and active principal metadata, and discovers the Sentry browser transport grant path without storing credentials.",
     "authority_read_client": "Typed same-origin HTTP client for Sentry authority read surfaces under /_/authority/read without browser-visible transport credentials, including badge archive state, grant provenance, key posture, and authority audit-event readback.",
     "authority_mutation_client": "Typed same-origin HTTP client for controlled Sentry authority mutations under /_/authority/mutate with idempotency keys and operator confirmation states, including badge-definition, principal-badge grant, and principal-key lifecycle controls. Badge grant/revoke and principal key revoke/rotate attach Level 3 command-auth signatures when a browser signer is ready.",
-    "nats_browser_transport": "NATS over WebSocket browser rail used by the cockpit through /_/nats after requesting a Sentry-minted delegated-principal native NATS credential through the same-origin grant path; the static bootstrap token is never used as a browser credential.",
+    "nats_browser_transport": "NATS over WebSocket browser rail used by the cockpit through /_/nats only when session bootstrap reports transport.ready=true and Sentry confirms transport_ready=true while returning a delegated-principal native NATS credential through the same-origin grant path; the static bootstrap token is never used as a browser credential.",
     "browser_command_signing": "Level 3 Lookout Web signer lifecycle for active-principal command authorship. Generates non-exportable native WebCrypto Ed25519 keys, stores the private CryptoKey in IndexedDB, registers only rawurl-base64 public key material with Sentry, selects matching active principal key records, and can locally sign smoke command payloads before backend envelope enforcement is enabled.",
     "config_templates": "Tracked JSON files remain examples/templates rather than live estate truth."
   },
@@ -39,7 +39,7 @@
     "The browser shell must not depend on reading the HttpOnly auth cookie directly; it consumes bootstrap/session payloads instead.",
     "The browser shell must not receive reusable transport credentials from session bootstrap payloads.",
     "The browser shell may request a short-lived scoped grant from the Sentry route advertised by session bootstrap, but must not store it in localStorage/sessionStorage.",
-    "Browser NATS state must distinguish session/auth failure, credential minting failure, and WebSocket rail failure.",
+    "Browser NATS state must distinguish session/auth failure, runtime readiness disabled, credential minting failure, Sentry transport_ready denial, and WebSocket rail failure.",
     "Verified command envelope enforcement for browser mutations depends on the explicit active-principal signing key lifecycle; NATS credentials must not be treated as command signatures.",
     "Level 3 Lookout Web command signing requires native WebCrypto Ed25519; unsupported browsers should use Lookout Desktop instead of fallback algorithms or JavaScript crypto polyfills.",
     "Lookout Web command signing stores non-exportable private CryptoKey material only in IndexedDB and registers only public Ed25519 key material with Sentry.",
@@ -50,7 +50,7 @@
   ],
   "known_risks": [
     "Authority cockpit reads depend on Sentry same-origin HTTP adapters and Aegis-projected identity headers; if the live edge config does not project those headers, authorized sessions can still be denied.",
-    "The browser transport depends on the /_/nats rail accepting Sentry-minted delegated-principal NATS credentials; the static bootstrap NATS token must not be reused for browser, CLI, desktop, service, node, or agent actors.",
+    "The browser transport depends on the /_/nats rail accepting Sentry-minted delegated-principal NATS credentials; Lookout must not connect unless both session bootstrap and the Sentry grant response confirm readiness, and the static bootstrap NATS token must not be reused for browser, CLI, desktop, service, node, or agent actors.",
     "Audit reads currently surface key lifecycle mutation evidence; broader mutation/session auditing and transport commands remain intentionally deferred.",
     "Template drift from generated runtime config is possible if bootstrap behavior changes and tracked examples are not refreshed.",
     "Repo documentation still needs cleanup where older prose says no session bootstrap exists or says clients are unimplemented; the map reflects the current code, not those stale lines.",

@@ -98,6 +98,17 @@ export function NatsProvider({ children }: PropsWithChildren) {
       return;
     }
 
+    if (!snapshot.transport.ready) {
+      setState({
+        state: "disconnected",
+        detail: snapshot.transport.detail,
+        reconnects: 0,
+        connectedServer: undefined,
+        lastError: undefined,
+      });
+      return;
+    }
+
     if (!snapshot.transport.grantReady || !snapshot.transport.credentialPath) {
       setState({
         state: "disconnected",
@@ -119,6 +130,15 @@ export function NatsProvider({ children }: PropsWithChildren) {
     let credsFile: string | undefined;
     try {
       const grant = await requestBrowserTransportGrant(snapshot);
+      if (!grant.transport_ready) {
+        setState((current) => ({
+          ...current,
+          state: "credential_error",
+          detail: "Sentry issued a transport grant, but the runtime rail did not confirm readiness.",
+          lastError: "transport_ready=false",
+        }));
+        return;
+      }
       credsFile = grant.native_credential?.creds_file;
       if (!credsFile) {
         setState((current) => ({
@@ -214,6 +234,7 @@ export function NatsProvider({ children }: PropsWithChildren) {
     };
   }, [
     snapshot.status,
+    snapshot.transport.ready,
     snapshot.transport.grantReady,
     snapshot.transport.credentialPath,
     snapshot.transport.credentialMethod,
