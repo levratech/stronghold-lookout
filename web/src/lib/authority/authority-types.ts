@@ -109,7 +109,12 @@ export type AuthorityMutationCommand =
   | "identity.create"
   | "principal.create_durable"
   | "context.create"
-  | "context.update";
+  | "context.update"
+  | "badge_definition.create"
+  | "badge_definition.update"
+  | "badge_definition.archive"
+  | "principal_badge.grant"
+  | "principal_badge.revoke";
 
 export type AuthorityMutationStatus = "accepted" | "denied" | "invalid" | "error";
 
@@ -155,4 +160,19 @@ export interface ContextMutationPayload {
   context_id?: string;
   parent_id?: string;
   name: string;
+}
+
+export interface BadgeDefinitionMutationPayload {
+  badge_id?: string;
+  context_id?: string;
+  name?: string;
+  description?: string;
+}
+
+export interface PrincipalBadgeGrantMutationPayload {
+  principal_id: string;
+  badge_id: string;
+  context_id: string;
+  permission: string;
+  reason?: string;
 }

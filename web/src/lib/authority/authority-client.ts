@@ -6,6 +6,7 @@ import type {
   AuthorityReadSurface,
   AuthorityMutationCommand,
   AuthorityMutationResult,
+  BadgeDefinitionMutationPayload,
   BadgeDefinitionReadModel,
   ContextReadModel,
   ContextMutationPayload,
@@ -14,6 +15,7 @@ import type {
   CreateIdentityPayload,
   IdentityReadModel,
   PageInfo,
+  PrincipalBadgeGrantMutationPayload,
   PrincipalBadgeGrantReadModel,
   PrincipalKeyReadModel,
   PrincipalReadModel,
@@ -216,4 +218,24 @@ export function createContext(payload: ContextMutationPayload) {
 
 export function updateContext(payload: ContextMutationPayload) {
   return mutateJSON("context.update", payload);
+}
+
+export function createBadgeDefinition(payload: BadgeDefinitionMutationPayload) {
+  return mutateJSON("badge_definition.create", payload);
+}
+
+export function updateBadgeDefinition(payload: BadgeDefinitionMutationPayload) {
+  return mutateJSON("badge_definition.update", payload);
+}
+
+export function archiveBadgeDefinition(payload: BadgeDefinitionMutationPayload) {
+  return mutateJSON("badge_definition.archive", payload);
+}
+
+export function grantPrincipalBadge(payload: PrincipalBadgeGrantMutationPayload) {
+  return mutateJSON("principal_badge.grant", payload);
+}
+
+export function revokePrincipalBadge(payload: PrincipalBadgeGrantMutationPayload) {
+  return mutateJSON("principal_badge.revoke", payload);
 }

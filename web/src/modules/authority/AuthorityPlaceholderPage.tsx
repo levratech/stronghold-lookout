@@ -8,10 +8,13 @@ import { useSession } from "../../lib/session/SessionProvider";
 import {
   AuthorityReadError,
   AuthorityMutationError,
+  archiveBadgeDefinition,
   createAccount,
+  createBadgeDefinition,
   createContext,
   createDurablePrincipal,
   createIdentity,
+  grantPrincipalBadge,
   readAccounts,
   readBadgeDefinitions,
   readBadgeGrants,
@@ -19,6 +22,8 @@ import {
   readIdentities,
   readPrincipalKeys,
   readPrincipals,
+  revokePrincipalBadge,
+  updateBadgeDefinition,
   updateContext,
 } from "../../lib/authority/authority-client";
 import type {
@@ -37,6 +42,24 @@ import { lookoutModules, type LookoutModuleDefinition } from "../../shell/module
 const authorityModules = lookoutModules.filter((module) =>
   module.route.startsWith("/authority/"),
 );
+
+const contextPermissionCatalog = [
+  "context.read",
+  "context.admin",
+  "identity.read",
+  "identity.manage",
+  "principal.read",
+  "principal.manage",
+  "badge.read",
+  "badge.manage",
+  "key.read",
+  "key.manage",
+  "files.read",
+  "files.write",
+  "agents.request",
+  "agents.execute",
+  "services.invoke",
+];
 
 const surfaceNotes: Record<string, string[]> = {
   accounts: [
@@ -190,7 +213,7 @@ function isLiveReadSurface(moduleId: string) {
 }
 
 function isMutationSurface(moduleId: string) {
-  return ["accounts", "identities", "contexts", "principals"].includes(moduleId);
+  return ["accounts", "identities", "contexts", "principals", "badges", "grants"].includes(moduleId);
 }
 
 type MutationState =
@@ -343,7 +366,11 @@ export function AuthorityPlaceholderPage() {
         }
 
         if (module?.id === "grants") {
-          const response = await readBadgeGrants(controller.signal, { limit: 100 });
+          const [response, badges, principals] = await Promise.all([
+            readBadgeGrants(controller.signal, { limit: 100 }),
+            readBadgeDefinitions(controller.signal, { limit: 100 }),
+            readPrincipals(controller.signal, { limit: 100 }),
+          ]);
           setReadState({
             status: response.items.length ? "ready" : "empty",
             detail: response.items.length
@@ -352,8 +379,8 @@ export function AuthorityPlaceholderPage() {
             accounts: [],
             contexts: [],
             identities: [],
-            badges: [],
-            principals: [],
+            badges: badges.items,
+            principals: principals.items,
             grants: response.items,
             keys: [],
           });
@@ -627,6 +654,10 @@ function AuthorityMutationPanel({
           <IdentityMutationFields accounts={readState.accounts} contexts={readState.contexts} defaultContextId={snapshotContextId} />
         ) : moduleId === "principals" ? (
           <PrincipalMutationFields principals={readState.principals} defaultContextId={snapshotContextId} />
+        ) : moduleId === "badges" ? (
+          <BadgeMutationFields badges={readState.badges} defaultContextId={snapshotContextId} />
+        ) : moduleId === "grants" ? (
+          <GrantMutationFields badges={readState.badges} principals={readState.principals} defaultContextId={snapshotContextId} />
         ) : (
           <ContextMutationFields contexts={readState.contexts} />
         )}
@@ -783,6 +814,108 @@ function ContextMutationFields({ contexts }: { contexts: ContextReadModel[] }) {
   );
 }
 
+function BadgeMutationFields({
+  badges,
+  defaultContextId,
+}: {
+  badges: BadgeDefinitionReadModel[];
+  defaultContextId: string;
+}) {
+  return (
+    <div className="authority-form__grid">
+      <label>
+        Mode
+        <select name="badge_command" required defaultValue="badge_definition.create">
+          <option value="badge_definition.create">create</option>
+          <option value="badge_definition.update">update</option>
+          <option value="badge_definition.archive">archive</option>
+        </select>
+      </label>
+      <label>
+        Badge ID
+        <input name="badge_id" list="badge-options" />
+        <datalist id="badge-options">
+          {badges.map((badge) => (
+            <option value={badge.id} key={badge.id}>{badge.name}</option>
+          ))}
+        </datalist>
+      </label>
+      <label>
+        Context ID
+        <input name="context_id" defaultValue={defaultContextId} />
+      </label>
+      <label>
+        Badge Name / Permission
+        <select name="name" defaultValue="badge.read">
+          {contextPermissionCatalog.map((permission) => (
+            <option value={permission} key={permission}>{permission}</option>
+          ))}
+        </select>
+      </label>
+      <label className="authority-form__wide">
+        Description
+        <input name="description" placeholder="What authority does this badge describe?" />
+      </label>
+    </div>
+  );
+}
+
+function GrantMutationFields({
+  badges,
+  principals,
+  defaultContextId,
+}: {
+  badges: BadgeDefinitionReadModel[];
+  principals: PrincipalReadModel[];
+  defaultContextId: string;
+}) {
+  return (
+    <div className="authority-form__grid">
+      <label>
+        Mode
+        <select name="grant_command" required defaultValue="principal_badge.grant">
+          <option value="principal_badge.grant">grant</option>
+          <option value="principal_badge.revoke">revoke</option>
+        </select>
+      </label>
+      <label>
+        Principal ID
+        <input name="principal_id" list="principal-options" required />
+        <datalist id="principal-options">
+          {principals.map((principal) => (
+            <option value={principal.id} key={principal.id}>{principal.principal_type}</option>
+          ))}
+        </datalist>
+      </label>
+      <label>
+        Badge ID
+        <input name="badge_id" list="grant-badge-options" required />
+        <datalist id="grant-badge-options">
+          {badges.map((badge) => (
+            <option value={badge.id} key={badge.id}>{badge.name}</option>
+          ))}
+        </datalist>
+      </label>
+      <label>
+        Context ID
+        <input name="context_id" defaultValue={defaultContextId} required />
+      </label>
+      <label>
+        Permission
+        <select name="permission" required defaultValue="badge.read">
+          {contextPermissionCatalog.map((permission) => (
+            <option value={permission} key={permission}>{permission}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Reason
+        <input name="reason" placeholder="Why is this authority being changed?" />
+      </label>
+    </div>
+  );
+}
+
 async function submitAuthorityMutation(moduleId: string, form: FormData) {
   if (moduleId === "accounts") {
     return createAccount({
@@ -807,6 +940,33 @@ async function submitAuthorityMutation(moduleId: string, form: FormData) {
       context_id: optionalTextValue(form, "context_id"),
       principal_id: optionalTextValue(form, "principal_id"),
     });
+  }
+  if (moduleId === "badges") {
+    const payload = {
+      badge_id: optionalTextValue(form, "badge_id"),
+      context_id: optionalTextValue(form, "context_id"),
+      name: optionalTextValue(form, "name"),
+      description: optionalTextValue(form, "description"),
+    };
+    const command = textValue(form, "badge_command");
+    if (command === "badge_definition.archive") {
+      return archiveBadgeDefinition(payload);
+    }
+    return command === "badge_definition.update"
+      ? updateBadgeDefinition(payload)
+      : createBadgeDefinition(payload);
+  }
+  if (moduleId === "grants") {
+    const payload = {
+      principal_id: textValue(form, "principal_id"),
+      badge_id: textValue(form, "badge_id"),
+      context_id: textValue(form, "context_id"),
+      permission: textValue(form, "permission"),
+      reason: optionalTextValue(form, "reason"),
+    };
+    return textValue(form, "grant_command") === "principal_badge.revoke"
+      ? revokePrincipalBadge(payload)
+      : grantPrincipalBadge(payload);
   }
   const payload = {
     name: textValue(form, "name"),
@@ -838,6 +998,10 @@ function mutationTitle(moduleId: string) {
       return "Create Durable Principal";
     case "contexts":
       return "Create Or Update Context";
+    case "badges":
+      return "Create, Update, Or Archive Badge";
+    case "grants":
+      return "Grant Or Revoke Badge Permission";
     default:
       return "Controlled Mutation";
   }
