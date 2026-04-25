@@ -42,6 +42,13 @@ import type {
   PrincipalKeyReadModel,
   PrincipalReadModel,
 } from "../../lib/authority/authority-types";
+import {
+  generateAndStoreBrowserCommandSigningKey,
+  getCommandSigningPosture,
+  signCommandPayload,
+  type CommandPayloadSignature,
+  type CommandSigningPosture,
+} from "../../lib/command-signing/command-signing";
 import { lookoutModules, type LookoutModuleDefinition } from "../../shell/module-registry";
 
 const authorityModules = lookoutModules.filter((module) =>
@@ -100,7 +107,7 @@ const surfaceNotes: Record<string, string[]> = {
   keys: [
     "Show key IDs, algorithm, status, created, expiry, and revoked state.",
     "Never show public key material, private key material, or metadata blobs that may leak secrets.",
-    "Defer rotation and revocation controls to the key lifecycle phase.",
+    "Level 3 browser command signing requires native WebCrypto Ed25519 or Lookout Desktop.",
   ],
   providers: [
     "Show Drawbridge provider posture and missing-header state.",
@@ -235,15 +242,27 @@ type MutationState =
   | { status: "accepted"; detail: string; result: AuthorityMutationResult }
   | { status: "denied" | "invalid" | "error"; detail: string; result?: AuthorityMutationResult };
 
+interface CommandSigningState {
+  status: "idle" | "loading" | "working" | "ready" | "error";
+  detail: string;
+  posture?: CommandSigningPosture;
+  smoke?: CommandPayloadSignature;
+}
+
 export function AuthorityPlaceholderPage() {
   const { surface } = useParams();
   const module = findModule(surface);
   const { snapshot } = useSession();
   const nats = useNats();
+  const activePrincipal = snapshot.activePrincipal ?? snapshot.root;
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [mutationState, setMutationState] = useState<MutationState>({
     status: "idle",
     detail: "Mutation controls are idle.",
+  });
+  const [commandSigningState, setCommandSigningState] = useState<CommandSigningState>({
+    status: "idle",
+    detail: "Command-signing posture has not been checked yet.",
   });
   const [readState, setReadState] = useState<LiveReadState>({
     status: "idle",
@@ -472,13 +491,143 @@ export function AuthorityPlaceholderPage() {
     return () => controller.abort();
   }, [module, refreshNonce]);
 
+  useEffect(() => {
+    if (!module || module.id !== "keys") {
+      setCommandSigningState({
+        status: "idle",
+        detail: "Command-signing posture is shown on the principal keys surface.",
+      });
+      return;
+    }
+
+    let cancelled = false;
+    const principalId = activePrincipal?.principalId;
+    setCommandSigningState((current) => ({
+      ...current,
+      status: "loading",
+      detail: "Checking browser-local Ed25519 command-signing posture.",
+    }));
+
+    void getCommandSigningPosture(principalId, readState.keys)
+      .then((posture) => {
+        if (cancelled) {
+          return;
+        }
+        setCommandSigningState({
+          status: posture.status === "ready" ? "ready" : posture.status === "error" ? "error" : "idle",
+          detail: posture.detail,
+          posture,
+        });
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        setCommandSigningState({
+          status: "error",
+          detail: error instanceof Error ? error.message : "Unable to inspect command-signing posture.",
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [module, activePrincipal?.principalId, readState.keys]);
+
   if (!module) {
     return <Navigate to="/authority/accounts" replace />;
   }
 
   const notes = surfaceNotes[module.id] ?? [];
   const isLiveSurface = isLiveReadSurface(module.id);
-  const activePrincipal = snapshot.activePrincipal ?? snapshot.root;
+
+  async function createBrowserCommandSigningKey() {
+    const principalId = activePrincipal?.principalId;
+    if (!principalId) {
+      setCommandSigningState({
+        status: "error",
+        detail: "No active principal is resolved for Level 3 command-signing setup.",
+        posture: commandSigningState.posture,
+      });
+      return;
+    }
+
+    setCommandSigningState((current) => ({
+      ...current,
+      status: "working",
+      detail: "Generating a browser-local non-exportable Ed25519 key and registering its public key with Sentry.",
+    }));
+
+    try {
+      const registration = await generateAndStoreBrowserCommandSigningKey(principalId);
+      const result = await registerPrincipalKey({
+        principal_id: registration.principalId,
+        key_id: registration.keyId,
+        algorithm: registration.algorithm,
+        public_key: registration.publicKey,
+      });
+      setMutationState({
+        status: "accepted",
+        detail: `principal_key ${result.resource_id ?? registration.keyId} accepted by Sentry.`,
+        result,
+      });
+      setCommandSigningState((current) => ({
+        ...current,
+        status: "ready",
+        detail: `Generated and registered browser Ed25519 key ${registration.keyId}. Refreshing Sentry key posture.`,
+      }));
+      setRefreshNonce((value) => value + 1);
+    } catch (error) {
+      setCommandSigningState((current) => ({
+        ...current,
+        status: "error",
+        detail: error instanceof Error ? error.message : "Unable to generate or register a browser command-signing key.",
+      }));
+    }
+  }
+
+  async function signSmokeCommand() {
+    const principalId = activePrincipal?.principalId;
+    const keyId = commandSigningState.posture?.keyId;
+    if (!principalId || !keyId) {
+      setCommandSigningState((current) => ({
+        ...current,
+        status: "error",
+        detail: "A ready active-principal signing key is required before smoke signing.",
+      }));
+      return;
+    }
+
+    setCommandSigningState((current) => ({
+      ...current,
+      status: "working",
+      detail: "Signing a local Level 3 command payload smoke check.",
+    }));
+
+    try {
+      const smoke = await signCommandPayload({
+        principalId,
+        keyId,
+        data: {
+          command_type: "lookout.command_signing.smoke",
+          principal_id: principalId,
+          checked_at: new Date().toISOString(),
+        },
+      });
+      setCommandSigningState((current) => ({
+        ...current,
+        status: "ready",
+        detail: "Local Ed25519 command-signing smoke check succeeded.",
+        smoke,
+      }));
+    } catch (error) {
+      setCommandSigningState((current) => ({
+        ...current,
+        status: "error",
+        detail: error instanceof Error ? error.message : "Local command-signing smoke check failed.",
+      }));
+    }
+  }
 
   return (
     <div className="page">
@@ -593,6 +742,15 @@ export function AuthorityPlaceholderPage() {
             mutationState={mutationState}
             onState={setMutationState}
             onAccepted={() => setRefreshNonce((value) => value + 1)}
+          />
+        ) : null}
+
+        {module.id === "keys" ? (
+          <BrowserCommandSigningPanel
+            state={commandSigningState}
+            activePrincipalId={activePrincipal?.principalId}
+            onCreate={createBrowserCommandSigningKey}
+            onSmoke={signSmokeCommand}
           />
         ) : null}
 
@@ -727,6 +885,93 @@ function AuthorityMutationPanel({
           {mutationState.detail}
           {mutationState.result?.error_code ? ` (${mutationState.result.error_code})` : ""}
         </div>
+      </div>
+    </Panel>
+  );
+}
+
+function BrowserCommandSigningPanel({
+  state,
+  activePrincipalId,
+  onCreate,
+  onSmoke,
+}: {
+  state: CommandSigningState;
+  activePrincipalId?: string;
+  onCreate: () => Promise<void>;
+  onSmoke: () => Promise<void>;
+}) {
+  const posture = state.posture;
+  const unsupported = posture?.status === "unsupported";
+  const ready = posture?.status === "ready";
+  const busy = state.status === "loading" || state.status === "working";
+
+  return (
+    <Panel
+      eyebrow="Level 3 Command Signing"
+      title="Browser Ed25519 Signer"
+      description="Lookout Web can create a browser-local non-exportable Ed25519 key for the active principal, register only the public key with Sentry, and use that key for command-authorship envelopes."
+      actions={<StatusPill tone={commandSigningTone(state, posture)} label={posture?.status ?? state.status} />}
+    >
+      <div className="kv-grid">
+        <div className="kv">
+          <div className="kv__label">Active Principal</div>
+          <div className="kv__value">{activePrincipalId ?? "Unavailable"}</div>
+        </div>
+        <div className="kv">
+          <div className="kv__label">Algorithm</div>
+          <div className="kv__value">ed25519</div>
+        </div>
+        <div className="kv">
+          <div className="kv__label">Selected Key</div>
+          <div className="kv__value">{posture?.keyId ?? "Not selected"}</div>
+        </div>
+        <div className="kv">
+          <div className="kv__label">Local Keys</div>
+          <div className="kv__value">{posture?.localKeyCount ?? 0}</div>
+        </div>
+      </div>
+      <div className={`state-notice ${unsupported ? "state-notice--denied" : ready ? "state-notice--success" : state.status === "error" ? "state-notice--error" : "state-notice--warning"}`}>
+        <div className="state-notice__title">Command-Signing Posture</div>
+        <div className="state-notice__body">{state.detail}</div>
+      </div>
+      {state.smoke ? (
+        <div className="list">
+          <div className="list-item">
+            <div>
+              <div className="list-item__title">Local Signing Smoke</div>
+              <div className="list-item__body">
+                key:{state.smoke.keyId} · nonce:{state.smoke.nonce} · expires:{state.smoke.expiresAt}
+              </div>
+              <div className="list-item__body">
+                signature:{state.smoke.principalSignature.slice(0, 18)}...
+              </div>
+            </div>
+            <StatusPill tone="success" label="signed" />
+          </div>
+        </div>
+      ) : null}
+      <div className="button-row">
+        <button
+          className="button"
+          type="button"
+          disabled={busy || unsupported || !activePrincipalId}
+          onClick={() => void onCreate()}
+        >
+          Generate Browser Ed25519 Key
+        </button>
+        <button
+          className="button button--ghost"
+          type="button"
+          disabled={busy || !ready}
+          onClick={() => void onSmoke()}
+        >
+          Sign Smoke Payload
+        </button>
+      </div>
+      <div className="empty-state">
+        This is for Level 3 Stronghold access only. If native WebCrypto Ed25519 is unavailable,
+        use Lookout Desktop rather than a fallback algorithm or JavaScript crypto polyfill.
       </div>
     </Panel>
   );
@@ -1142,6 +1387,22 @@ function mutationTone(status: MutationState["status"]) {
     default:
       return "danger" as const;
   }
+}
+
+function commandSigningTone(
+  state: CommandSigningState,
+  posture: CommandSigningPosture | undefined,
+) {
+  if (posture?.status === "ready") {
+    return "success" as const;
+  }
+  if (state.status === "error" || posture?.status === "unsupported") {
+    return "danger" as const;
+  }
+  if (state.status === "loading" || state.status === "working" || posture?.status === "missing" || posture?.status === "unregistered") {
+    return "warning" as const;
+  }
+  return "neutral" as const;
 }
 
 function PrincipalList({ principals }: { principals: PrincipalReadModel[] }) {
