@@ -206,6 +206,21 @@ export function clearAuthHint() {
   sessionStorage.removeItem(authHintStorageKey);
 }
 
+export async function logoutSession(signal?: AbortSignal) {
+  const response = await fetch(lookoutEnvironment.logoutPath, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      Accept: "application/json",
+    },
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Logout returned ${response.status}.`);
+  }
+}
+
 export function sessionHintSnapshot(): SessionSnapshot {
   const hinted = sessionStorage.getItem(authHintStorageKey) === "authenticated";
   if (hinted) {

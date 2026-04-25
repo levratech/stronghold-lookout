@@ -10,6 +10,7 @@ import { lookoutEnvironment } from "../../env";
 import {
   clearAuthHint,
   fetchSessionSnapshot,
+  logoutSession,
   openAuthWindow,
   persistAuthHint,
   sessionHintSnapshot,
@@ -137,23 +138,35 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
   const logout = () => {
     popupPending.current = false;
-    clearAuthHint();
     setSnapshot({
-      status: "unauthenticated",
-      source: "unknown",
-      account: null,
-      identity: null,
-      context: null,
-      root: null,
-      activePrincipal: null,
-      badgeSummary: {
-        badgeIds: [],
-        count: 0,
-      },
-      transport: defaultSnapshot.transport,
-      detail:
-        "Cleared the cockpit's local auth hint. No same-origin logout endpoint is exposed yet, so the browser session itself may still exist.",
+      ...snapshot,
+      status: "loading",
+      detail: "Clearing same-origin Stronghold session state.",
     });
+
+    void logoutSession()
+      .catch(() => {
+        // Local hint cleanup is still safe even when the remote logout endpoint is unavailable.
+      })
+      .finally(() => {
+        clearAuthHint();
+        setSnapshot({
+          status: "unauthenticated",
+          source: "unknown",
+          account: null,
+          identity: null,
+          context: null,
+          root: null,
+          activePrincipal: null,
+          badgeSummary: {
+            badgeIds: [],
+            count: 0,
+          },
+          transport: defaultSnapshot.transport,
+          detail:
+            "Cleared the same-origin logout endpoint and local cockpit auth hint.",
+        });
+      });
   };
 
   return (

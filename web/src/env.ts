@@ -10,6 +10,7 @@ export const lookoutEnvironment = {
   authProvider: import.meta.env.VITE_LOOKOUT_AUTH_PROVIDER ?? "google",
   sessionBootstrapPath:
     import.meta.env.VITE_LOOKOUT_SESSION_BOOTSTRAP_PATH ?? "/_/auth/session",
+  logoutPath: import.meta.env.VITE_LOOKOUT_LOGOUT_PATH ?? "/_/auth/logout",
   natsPath: import.meta.env.VITE_LOOKOUT_NATS_PATH ?? "/_/nats",
 };
 

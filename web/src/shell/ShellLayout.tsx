@@ -100,7 +100,7 @@ export function ShellLayout() {
                 Login
               </button>
               <button className="button button--danger" onClick={logout}>
-                Clear Hint
+                Logout
               </button>
             </div>
           </div>
