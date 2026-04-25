@@ -264,6 +264,11 @@ type DelegatedTransportDrillState =
   | { status: "running"; detail: string; result?: undefined }
   | { status: "passed" | "failed" | "error"; detail: string; result?: DelegatedTransportDrillResult };
 
+type NegativeTransportDrillState =
+  | { status: "idle"; detail: string; checks?: undefined }
+  | { status: "running"; detail: string; checks?: undefined }
+  | { status: "passed" | "failed" | "error"; detail: string; checks?: NegativeTransportDrillCheck[] };
+
 interface DelegatedTransportDrillResult {
   credentialPrincipalId?: string;
   activePrincipalId?: string;
@@ -275,6 +280,13 @@ interface DelegatedTransportDrillResult {
     subAllow: string[];
   };
   probeResults: NatsPermissionProbeResult[];
+}
+
+interface NegativeTransportDrillCheck {
+  check: string;
+  expected: string;
+  observed: string;
+  detail?: string;
 }
 
 export function AuthorityPlaceholderPage() {
@@ -1083,13 +1095,19 @@ function DelegatedTransportDrillPanel({
     status: "idle",
     detail: "Delegated service/agent transport drill has not run in this tab.",
   });
+  const [negativeState, setNegativeState] = useState<NegativeTransportDrillState>({
+    status: "idle",
+    detail: "Negative transport drill has not run in this tab.",
+  });
+  const [targetPrincipalId, setTargetPrincipalId] = useState("");
+  const [foreignPrincipalId, setForeignPrincipalId] = useState("");
   const ready = state.posture?.status === "ready" && activePrincipalId && state.posture.keyId;
-  const busy = drillState.status === "running";
+  const busy = drillState.status === "running" || negativeState.status === "running";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const targetPrincipalId = String(form.get("principal_id") ?? "").trim();
+    const requestedPrincipalId = targetPrincipalId.trim();
     const rail = String(form.get("rail") ?? "service_runtime").trim();
     const profile = String(form.get("profile") ?? "").trim();
 
@@ -1100,7 +1118,7 @@ function DelegatedTransportDrillPanel({
       });
       return;
     }
-    if (!targetPrincipalId) {
+    if (!requestedPrincipalId) {
       setDrillState({ status: "error", detail: "Target service or agent principal ID is required." });
       return;
     }
@@ -1113,7 +1131,7 @@ function DelegatedTransportDrillPanel({
     let delegatedConnection: NatsConnection | undefined;
     try {
       const payload = {
-        principal_id: targetPrincipalId,
+        principal_id: requestedPrincipalId,
         rail,
         ...(profile ? { profile } : {}),
         native_required: true,
@@ -1199,6 +1217,131 @@ function DelegatedTransportDrillPanel({
     }
   }
 
+  async function runNegativeDrill() {
+    const requestedPrincipalId = targetPrincipalId.trim();
+    const requestedForeignPrincipalId = foreignPrincipalId.trim();
+    if (!activePrincipalId || !state.posture?.keyId) {
+      setNegativeState({
+        status: "error",
+        detail: "A ready active-principal command-signing key is required before running negative transport checks.",
+      });
+      return;
+    }
+    if (!requestedPrincipalId) {
+      setNegativeState({ status: "error", detail: "Target service or agent principal ID is required." });
+      return;
+    }
+
+    setNegativeState({
+      status: "running",
+      detail: "Running unsigned, replay, forged-header, and bad-delegation checks.",
+    });
+
+    const checks: NegativeTransportDrillCheck[] = [];
+    try {
+      const unsignedPayload = {
+        principal_id: requestedPrincipalId,
+        rail: "service_runtime",
+        native_required: false,
+      };
+      const unsigned = await requestDelegatedTransport(unsignedPayload);
+      checks.push({
+        check: "unsigned delegated service credential",
+        expected: "denied",
+        observed: unsigned.response.status === 403 ? "denied" : `HTTP ${unsigned.response.status}`,
+        detail: errorCodeOrMessage(unsigned.body),
+      });
+
+      const replayPayload = {
+        principal_id: requestedPrincipalId,
+        rail: "service_runtime",
+        native_required: false,
+      };
+      const replayBody = JSON.stringify(replayPayload);
+      const replaySignature = await signCommandPayload({
+        principalId: activePrincipalId,
+        keyId: state.posture.keyId,
+        data: {
+          command_type: "nats_transport_credential.issue",
+          payload: replayPayload,
+        },
+      });
+      const replayHeader = commandAuthHeaderValue(replaySignature, activeIdentityId);
+      const firstReplay = await requestDelegatedTransport(replayPayload, replayHeader, replayBody);
+      const secondReplay = await requestDelegatedTransport(replayPayload, replayHeader, replayBody);
+      checks.push({
+        check: "signed credential replay",
+        expected: "first accepted, replay denied",
+        observed:
+          firstReplay.response.ok && secondReplay.response.status === 403
+            ? "first accepted, replay denied"
+            : `first HTTP ${firstReplay.response.status}, second HTTP ${secondReplay.response.status}`,
+        detail: errorCodeOrMessage(secondReplay.body),
+      });
+
+      const forgedPrincipal = "00000000-0000-0000-0000-000000000000";
+      const forged = await requestDelegatedTransport(
+        { rail: "browser_websocket", native_required: false },
+        undefined,
+        undefined,
+        { "X-Aegis-Principal": forgedPrincipal, "X-Aegis-Context": "00000000-0000-0000-0000-000000000000" },
+      );
+      const forgedPrincipalObserved = stringClaim(forged.body?.claims, "principal_id");
+      checks.push({
+        check: "browser-forged Aegis headers",
+        expected: "ignored by edge",
+        observed:
+          forged.response.ok && forgedPrincipalObserved === activePrincipalId
+            ? "ignored by edge"
+            : `HTTP ${forged.response.status}, principal ${forgedPrincipalObserved ?? "unavailable"}`,
+        detail: forgedPrincipalObserved ? `claims.principal_id=${forgedPrincipalObserved}` : errorCodeOrMessage(forged.body),
+      });
+
+      if (requestedForeignPrincipalId) {
+        const foreignPayload = {
+          principal_id: requestedForeignPrincipalId,
+          rail: "service_runtime",
+          native_required: false,
+        };
+        const foreignBody = JSON.stringify(foreignPayload);
+        const foreignSignature = await signCommandPayload({
+          principalId: activePrincipalId,
+          keyId: state.posture.keyId,
+          data: {
+            command_type: "nats_transport_credential.issue",
+            payload: foreignPayload,
+          },
+        });
+        const foreign = await requestDelegatedTransport(
+          foreignPayload,
+          commandAuthHeaderValue(foreignSignature, activeIdentityId),
+          foreignBody,
+        );
+        checks.push({
+          check: "signed unowned runtime principal delegation",
+          expected: "denied",
+          observed: foreign.response.status === 403 ? "denied" : `HTTP ${foreign.response.status}`,
+          detail: errorCodeOrMessage(foreign.body),
+        });
+      }
+
+      const passed = checks.every((check) => check.expected === check.observed);
+      setNegativeState({
+        status: passed ? "passed" : "failed",
+        detail: passed
+          ? "Negative transport checks matched expected fail-closed behavior."
+          : "One or more negative transport checks did not match the expected behavior.",
+        checks,
+      });
+    } catch (error) {
+      setNegativeState({
+        status: "error",
+        detail: error instanceof Error ? error.message : "Negative transport drill failed.",
+        checks,
+      });
+    }
+  }
+
   return (
     <Panel
       eyebrow="RCD-05 Drill"
@@ -1210,7 +1353,7 @@ function DelegatedTransportDrillPanel({
         <div className="authority-form__grid">
           <label>
             Service or Agent Principal ID
-            <input name="principal_id" required />
+            <input name="principal_id" value={targetPrincipalId} onChange={(event) => setTargetPrincipalId(event.currentTarget.value)} required />
           </label>
           <label>
             Rail
@@ -1225,6 +1368,10 @@ function DelegatedTransportDrillPanel({
             <input name="profile" placeholder="service, durable_agent, desktop_node" />
           </label>
           <label>
+            Foreign Principal ID (optional)
+            <input value={foreignPrincipalId} onChange={(event) => setForeignPrincipalId(event.currentTarget.value)} placeholder="Unowned runtime principal for denial check" />
+          </label>
+          <label>
             Active Context
             <input value={activeContextId ?? "Unavailable"} readOnly />
           </label>
@@ -1232,6 +1379,9 @@ function DelegatedTransportDrillPanel({
         <div className="button-row">
           <button className="button" type="submit" disabled={busy || !ready}>
             Run Delegated Transport Drill
+          </button>
+          <button className="button button--ghost" type="button" disabled={busy || !ready} onClick={() => void runNegativeDrill()}>
+            Run Negative Drill
           </button>
         </div>
       </form>
@@ -1262,6 +1412,24 @@ function DelegatedTransportDrillPanel({
                 {result.error ? <div className="list-item__body">{result.error}</div> : null}
               </div>
               <StatusPill tone={result.expected === result.observed ? "success" : "danger"} label={result.observed} />
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div className={`state-notice ${negativeState.status === "passed" ? "state-notice--success" : negativeState.status === "running" ? "state-notice--loading" : negativeState.status === "idle" ? "" : "state-notice--error"}`}>
+        <div className="state-notice__title">Negative Transport Result</div>
+        <div className="state-notice__body">{negativeState.detail}</div>
+      </div>
+      {negativeState.checks?.length ? (
+        <div className="list">
+          {negativeState.checks.map((check) => (
+            <div className="list-item" key={check.check}>
+              <div>
+                <div className="list-item__title">{check.check}</div>
+                <div className="list-item__body">expected:{check.expected} · observed:{check.observed}</div>
+                {check.detail ? <div className="list-item__body">{check.detail}</div> : null}
+              </div>
+              <StatusPill tone={check.expected === check.observed ? "success" : "danger"} label={check.expected === check.observed ? "matched" : "mismatch"} />
             </div>
           ))}
         </div>
@@ -1741,6 +1909,7 @@ function drillTone(status: DelegatedTransportDrillState["status"]) {
 interface DelegatedTransportGrantResponse {
   status?: string;
   message?: string;
+  error_code?: string;
   nats_native?: boolean;
   transport_ready?: boolean;
   grant_token?: string;
@@ -1748,6 +1917,41 @@ interface DelegatedTransportGrantResponse {
   native_credential?: {
     creds_file?: string;
   };
+}
+
+async function requestDelegatedTransport(
+  payload: Record<string, unknown>,
+  commandAuth?: string,
+  body = JSON.stringify(payload),
+  extraHeaders?: Record<string, string>,
+) {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+    "Idempotency-Key": crypto.randomUUID(),
+    ...extraHeaders,
+  };
+  if (commandAuth) {
+    headers["X-Stronghold-Command-Auth"] = commandAuth;
+  }
+  const response = await fetch("/_/transport/nats/credential", {
+    method: "POST",
+    credentials: "same-origin",
+    headers,
+    body,
+  });
+  const text = await response.text();
+  let parsed: DelegatedTransportGrantResponse | undefined;
+  try {
+    parsed = text ? (JSON.parse(text) as DelegatedTransportGrantResponse) : undefined;
+  } catch {
+    parsed = { message: text };
+  }
+  return { response, body: parsed };
+}
+
+function errorCodeOrMessage(body: DelegatedTransportGrantResponse | undefined) {
+  return body?.error_code ?? body?.message ?? body?.status;
 }
 
 function concreteDrillSubject(pattern: string | undefined, suffix: string) {
