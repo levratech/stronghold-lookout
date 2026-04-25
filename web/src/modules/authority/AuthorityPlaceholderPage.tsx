@@ -876,7 +876,8 @@ function AuthorityMutationPanel({
 }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     onState({ status: "submitting", detail: "Submitting controlled authority mutation through Sentry." });
     try {
       const result = await submitAuthorityMutation(moduleId, form, signingOptions);
@@ -886,7 +887,7 @@ function AuthorityMutationPanel({
         result,
       });
       onAccepted();
-      event.currentTarget.reset();
+      formElement.reset();
     } catch (error) {
       if (error instanceof AuthorityMutationError) {
         onState({
