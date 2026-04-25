@@ -53,7 +53,7 @@
   "known_risks": [
     "Authority cockpit reads prefer the browser NATS rail when connected and fall back to Sentry same-origin HTTP adapters; if the live edge config or transport grant path is stale, authorized sessions can still be denied.",
     "The browser transport depends on the /_/nats rail accepting Sentry-minted delegated-principal NATS credentials; Lookout must not connect unless both session bootstrap and the Sentry grant response confirm readiness, and the static bootstrap NATS token must not be reused for browser, CLI, desktop, service, node, or agent actors.",
-    "Audit reads currently surface key lifecycle mutation evidence; broader mutation/session auditing and transport commands remain intentionally deferred.",
+    "Audit reads surface key lifecycle, badge-definition lifecycle, principal badge grant/revoke, and NATS transport credential evidence; remaining mutation families should be added deliberately as each authority surface hardens.",
     "Lookout truth panels expose the current memory-only replay posture, observed in-tab denial state, and browser NATS allow/deny probe results, but they do not replace backend evidence bundles or broader adversarial smoke commands.",
     "Template drift from generated runtime config is possible if bootstrap behavior changes and tracked examples are not refreshed.",
     "Repo documentation still needs cleanup where older prose says no session bootstrap exists or says clients are unimplemented; the map reflects the current code, not those stale lines.",
