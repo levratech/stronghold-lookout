@@ -1,4 +1,5 @@
 import { lookoutEnvironment } from "../../env";
+import { headers as natsHeaders, type NatsConnection } from "nats.ws";
 import {
   commandAuthHeaderValue,
   signCommandPayload,
@@ -38,6 +39,11 @@ export interface AuthorityMutationSigningOptions {
 interface AuthorityListResponse<T> {
   page: PageInfo;
   items: T[];
+}
+
+export interface AuthorityNatsReadTransport {
+  connection?: NatsConnection | null;
+  grantToken?: string;
 }
 
 interface RawAuthorityListResponse<T> {
@@ -93,11 +99,53 @@ function authorityMutationURL(command: AuthorityMutationCommand) {
   return new URL(`/_/authority/mutate/${command}`, window.location.origin);
 }
 
+function authorityReadSubject(surface: AuthorityReadSurface) {
+  switch (surface) {
+    case "overview":
+      return "stronghold.authority.read.overview";
+    case "badges":
+      return "stronghold.authority.read.badge_definitions";
+    case "grants":
+      return "stronghold.authority.read.badge_grants";
+    case "keys":
+      return "stronghold.authority.read.principal_keys";
+    case "audit":
+      return "stronghold.authority.read.audit_events";
+    default:
+      return `stronghold.authority.read.${surface}`;
+  }
+}
+
+function natsReadPayload(filter?: AuthorityReadFilter) {
+  if (!filter) {
+    return new TextEncoder().encode("{}");
+  }
+  return new TextEncoder().encode(JSON.stringify(filter));
+}
+
 async function readJSON<T>(
   surface: AuthorityReadSurface,
   signal?: AbortSignal,
   filter?: AuthorityReadFilter,
+  transport?: AuthorityNatsReadTransport,
 ): Promise<T> {
+  if (transport?.connection && transport.grantToken) {
+    const headers = natsHeaders();
+    headers.set("Authorization", `Bearer ${transport.grantToken}`);
+    const response = await transport.connection.request(
+      authorityReadSubject(surface),
+      natsReadPayload(filter),
+      { timeout: 5_000, headers },
+    );
+    const payload = JSON.parse(new TextDecoder().decode(response.data || new Uint8Array())) as
+      | (T & { error?: string })
+      | { error?: string };
+    if (payload && typeof payload === "object" && "error" in payload && payload.error) {
+      throw new AuthorityReadError(403, payload.error);
+    }
+    return payload as T;
+  }
+
   const response = await fetch(authorityReadURL(surface, filter), {
     credentials: "same-origin",
     headers: { Accept: "application/json" },
@@ -173,78 +221,86 @@ function normalizeList<T>(payload: RawAuthorityListResponse<T>, key: keyof RawAu
   };
 }
 
-export function readAuthorityOverview(signal?: AbortSignal, filter?: AuthorityReadFilter) {
-  return readJSON<AuthorityOverviewReadModel>("overview", signal, filter);
+export function readAuthorityOverview(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
+  return readJSON<AuthorityOverviewReadModel>("overview", signal, filter, transport);
 }
 
-export async function readAccounts(signal?: AbortSignal, filter?: AuthorityReadFilter) {
+export async function readAccounts(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
   const payload = await readJSON<RawAuthorityListResponse<AccountReadModel>>(
     "accounts",
     signal,
     filter,
+    transport,
   );
   return normalizeList(payload, "accounts") as AuthorityListResponse<AccountReadModel>;
 }
 
-export async function readContexts(signal?: AbortSignal, filter?: AuthorityReadFilter) {
+export async function readContexts(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
   const payload = await readJSON<RawAuthorityListResponse<ContextReadModel>>(
     "contexts",
     signal,
     filter,
+    transport,
   );
   return normalizeList(payload, "contexts") as AuthorityListResponse<ContextReadModel>;
 }
 
-export async function readIdentities(signal?: AbortSignal, filter?: AuthorityReadFilter) {
+export async function readIdentities(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
   const payload = await readJSON<RawAuthorityListResponse<IdentityReadModel>>(
     "identities",
     signal,
     filter,
+    transport,
   );
   return normalizeList(payload, "identities") as AuthorityListResponse<IdentityReadModel>;
 }
 
-export async function readPrincipals(signal?: AbortSignal, filter?: AuthorityReadFilter) {
+export async function readPrincipals(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
   const payload = await readJSON<RawAuthorityListResponse<PrincipalReadModel>>(
     "principals",
     signal,
     filter,
+    transport,
   );
   return normalizeList(payload, "principals") as AuthorityListResponse<PrincipalReadModel>;
 }
 
-export async function readBadgeDefinitions(signal?: AbortSignal, filter?: AuthorityReadFilter) {
+export async function readBadgeDefinitions(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
   const payload = await readJSON<RawAuthorityListResponse<BadgeDefinitionReadModel>>(
     "badges",
     signal,
     filter,
+    transport,
   );
   return normalizeList(payload, "badge_definitions") as AuthorityListResponse<BadgeDefinitionReadModel>;
 }
 
-export async function readBadgeGrants(signal?: AbortSignal, filter?: AuthorityReadFilter) {
+export async function readBadgeGrants(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
   const payload = await readJSON<RawAuthorityListResponse<PrincipalBadgeGrantReadModel>>(
     "grants",
     signal,
     filter,
+    transport,
   );
   return normalizeList(payload, "badge_grants") as AuthorityListResponse<PrincipalBadgeGrantReadModel>;
 }
 
-export async function readPrincipalKeys(signal?: AbortSignal, filter?: AuthorityReadFilter) {
+export async function readPrincipalKeys(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
   const payload = await readJSON<RawAuthorityListResponse<PrincipalKeyReadModel>>(
     "keys",
     signal,
     filter,
+    transport,
   );
   return normalizeList(payload, "principal_keys") as AuthorityListResponse<PrincipalKeyReadModel>;
 }
 
-export async function readAuthorityAuditEvents(signal?: AbortSignal, filter?: AuthorityReadFilter) {
+export async function readAuthorityAuditEvents(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
   const payload = await readJSON<RawAuthorityListResponse<AuthorityAuditEventReadModel>>(
     "audit",
     signal,
     filter,
+    transport,
   );
   return normalizeList(payload, "audit_events") as AuthorityListResponse<AuthorityAuditEventReadModel>;
 }

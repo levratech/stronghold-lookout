@@ -23,12 +23,12 @@
     "web/package.json"
   ],
   "service_boundaries": {
-    "cli_runtime": "Go/Cobra CLI for login, whoami, config get/set/push, message capture, and operator workflows over NATS.",
+    "cli_runtime": "Go/Cobra CLI for login, whoami, config get/set/push, message capture, and operator workflows over NATS, including NATS_CREDS_FILE-based native JWT credentials for live config pushes.",
     "web_shell": "React/Vite browser cockpit with shell layout, static module registry, and read-first Overview, Sentry, Aegis, and Authority operator surfaces.",
     "session_client": "Same-origin browser session boundary that opens Drawbridge auth, listens for callback completion, refreshes /_/auth/session, calls same-origin logout, normalizes separate root and active principal metadata, and discovers the Sentry browser transport grant path without storing credentials.",
-    "authority_read_client": "Typed same-origin HTTP client for Sentry authority read surfaces under /_/authority/read without browser-visible transport credentials, including badge archive state, grant provenance, key posture, and authority audit-event readback.",
+    "authority_read_client": "Typed authority read client that falls back to same-origin HTTP under /_/authority/read, but prefers browser NATS request/reply with the short-lived Sentry grant token once the /_/nats rail is connected. It includes badge archive state, grant provenance, key posture, and authority audit-event readback.",
     "authority_mutation_client": "Typed same-origin HTTP client for controlled Sentry authority mutations under /_/authority/mutate with idempotency keys and operator confirmation states, including badge-definition, principal-badge grant, and principal-key lifecycle controls. Badge grant/revoke and principal key revoke/rotate attach Level 3 command-auth signatures when a browser signer is ready.",
-    "nats_browser_transport": "NATS over WebSocket browser rail used by the cockpit through /_/nats only when session bootstrap reports transport.ready=true and Sentry confirms transport_ready=true while returning a delegated-principal native NATS credential through the same-origin grant path; the static bootstrap token is never used as a browser credential.",
+    "nats_browser_transport": "NATS over WebSocket browser rail used by the cockpit through /_/nats only when session bootstrap reports transport.ready=true and Sentry confirms transport_ready=true while returning a delegated-principal native NATS credential through the same-origin grant path. The grant token is kept in memory for authorized NATS authority reads and the static bootstrap token is never used as a browser credential.",
     "browser_command_signing": "Level 3 Lookout Web signer lifecycle for active-principal command authorship. Generates non-exportable native WebCrypto Ed25519 keys, stores the private CryptoKey in IndexedDB, registers only rawurl-base64 public key material with Sentry, selects matching active principal key records, and can locally sign smoke command payloads before backend envelope enforcement is enabled.",
     "config_templates": "Tracked JSON files remain examples/templates rather than live estate truth."
   },
@@ -39,6 +39,7 @@
     "The browser shell must not depend on reading the HttpOnly auth cookie directly; it consumes bootstrap/session payloads instead.",
     "The browser shell must not receive reusable transport credentials from session bootstrap payloads.",
     "The browser shell may request a short-lived scoped grant from the Sentry route advertised by session bootstrap, but must not store it in localStorage/sessionStorage.",
+    "Browser authority reads may use the in-memory Sentry transport grant over NATS request/reply after the rail connects; HTTP remains the compatibility fallback.",
     "Browser NATS state must distinguish session/auth failure, runtime readiness disabled, credential minting failure, Sentry transport_ready denial, and WebSocket rail failure.",
     "Verified command envelope enforcement for browser mutations depends on the explicit active-principal signing key lifecycle; NATS credentials must not be treated as command signatures.",
     "Level 3 Lookout Web command signing requires native WebCrypto Ed25519; unsupported browsers should use Lookout Desktop instead of fallback algorithms or JavaScript crypto polyfills.",
@@ -49,7 +50,7 @@
     "Read-first Sentry/Aegis pages should stay honest about backend gaps rather than implying mature browser-admin APIs exist."
   ],
   "known_risks": [
-    "Authority cockpit reads depend on Sentry same-origin HTTP adapters and Aegis-projected identity headers; if the live edge config does not project those headers, authorized sessions can still be denied.",
+    "Authority cockpit reads prefer the browser NATS rail when connected and fall back to Sentry same-origin HTTP adapters; if the live edge config or transport grant path is stale, authorized sessions can still be denied.",
     "The browser transport depends on the /_/nats rail accepting Sentry-minted delegated-principal NATS credentials; Lookout must not connect unless both session bootstrap and the Sentry grant response confirm readiness, and the static bootstrap NATS token must not be reused for browser, CLI, desktop, service, node, or agent actors.",
     "Audit reads currently surface key lifecycle mutation evidence; broader mutation/session auditing and transport commands remain intentionally deferred.",
     "Template drift from generated runtime config is possible if bootstrap behavior changes and tracked examples are not refreshed.",

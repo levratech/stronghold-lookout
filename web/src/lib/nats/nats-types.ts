@@ -17,6 +17,7 @@ export interface NatsContextValue {
   serverURL: string;
   lastError?: string;
   connectedServer?: string;
+  grantToken?: string;
   connection?: NatsConnection | null;
   reconnects: number;
   connect: () => Promise<void>;

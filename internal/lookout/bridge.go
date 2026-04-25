@@ -39,7 +39,12 @@ func NewSession() (*Session, error) {
 		natsURL = nats.DefaultURL
 	}
 
-	nc, err := nats.Connect(natsURL, nats.Name("Stronghold Lookout CLI"))
+	opts := []nats.Option{nats.Name("Stronghold Lookout CLI")}
+	if credsFile := os.Getenv("NATS_CREDS_FILE"); credsFile != "" {
+		opts = append(opts, nats.UserCredentials(credsFile))
+	}
+
+	nc, err := nats.Connect(natsURL, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("NATS connection failed. Do try to keep the server running. (Error: %w)", err)
 	}

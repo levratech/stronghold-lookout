@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { Panel } from "../../components/ui/Panel";
@@ -258,6 +258,13 @@ export function AuthorityPlaceholderPage() {
   const { snapshot } = useSession();
   const nats = useNats();
   const activePrincipal = snapshot.activePrincipal ?? snapshot.root;
+  const authorityReadTransport = useMemo(
+    () =>
+      nats.state === "connected" && nats.connection && nats.grantToken
+        ? { connection: nats.connection, grantToken: nats.grantToken }
+        : undefined,
+    [nats.state, nats.connection, nats.grantToken],
+  );
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [mutationState, setMutationState] = useState<MutationState>({
     status: "idle",
@@ -300,7 +307,9 @@ export function AuthorityPlaceholderPage() {
     const controller = new AbortController();
     setReadState({
       status: "loading",
-      detail: `Loading ${module.name.toLowerCase()} through the Sentry authority read adapter.`,
+      detail: `Loading ${module.name.toLowerCase()} through ${
+        authorityReadTransport ? "browser NATS" : "the Sentry HTTP authority read adapter"
+      }.`,
       accounts: [],
       contexts: [],
       identities: [],
@@ -314,12 +323,12 @@ export function AuthorityPlaceholderPage() {
     async function load() {
       try {
         if (module?.id === "accounts") {
-          const response = await readAccounts(controller.signal, { limit: 100 });
+          const response = await readAccounts(controller.signal, { limit: 100 }, authorityReadTransport);
           setReadState({
             status: response.items.length ? "ready" : "empty",
             detail: response.items.length
-            ? "Accounts loaded through Sentry authority reads."
-            : "No accounts were returned for this session scope.",
+              ? `Accounts loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
+              : "No accounts were returned for this session scope.",
             accounts: response.items,
             contexts: [],
             identities: [],
@@ -333,11 +342,11 @@ export function AuthorityPlaceholderPage() {
         }
 
         if (module?.id === "identities") {
-          const response = await readIdentities(controller.signal, { limit: 100 });
+          const response = await readIdentities(controller.signal, { limit: 100 }, authorityReadTransport);
           setReadState({
             status: response.items.length ? "ready" : "empty",
             detail: response.items.length
-              ? "Identities and paired principals loaded through Sentry authority reads."
+              ? `Identities and paired principals loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
               : "No identities were returned for this session scope.",
             accounts: [],
             contexts: [],
@@ -352,11 +361,11 @@ export function AuthorityPlaceholderPage() {
         }
 
         if (module?.id === "contexts") {
-          const response = await readContexts(controller.signal, { limit: 100 });
+          const response = await readContexts(controller.signal, { limit: 100 }, authorityReadTransport);
           setReadState({
             status: response.items.length ? "ready" : "empty",
             detail: response.items.length
-              ? "Contexts loaded through Sentry authority reads."
+              ? `Contexts loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
               : "No contexts were returned for this session scope.",
             accounts: [],
             contexts: response.items,
@@ -371,11 +380,11 @@ export function AuthorityPlaceholderPage() {
         }
 
         if (module?.id === "badges") {
-          const response = await readBadgeDefinitions(controller.signal, { limit: 100 });
+          const response = await readBadgeDefinitions(controller.signal, { limit: 100 }, authorityReadTransport);
           setReadState({
             status: response.items.length ? "ready" : "empty",
             detail: response.items.length
-              ? "Badge definitions loaded through Sentry authority reads."
+              ? `Badge definitions loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
               : "No badge definitions were returned for this session scope.",
             accounts: [],
             contexts: [],
@@ -390,11 +399,11 @@ export function AuthorityPlaceholderPage() {
         }
 
         if (module?.id === "principals") {
-          const response = await readPrincipals(controller.signal, { limit: 100 });
+          const response = await readPrincipals(controller.signal, { limit: 100 }, authorityReadTransport);
           setReadState({
             status: response.items.length ? "ready" : "empty",
             detail: response.items.length
-              ? "Principals loaded through Sentry authority reads."
+              ? `Principals loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
               : "No principals were returned for this session scope.",
             accounts: [],
             contexts: [],
@@ -410,14 +419,14 @@ export function AuthorityPlaceholderPage() {
 
         if (module?.id === "grants") {
           const [response, badges, principals] = await Promise.all([
-            readBadgeGrants(controller.signal, { limit: 100 }),
-            readBadgeDefinitions(controller.signal, { limit: 100 }),
-            readPrincipals(controller.signal, { limit: 100 }),
+            readBadgeGrants(controller.signal, { limit: 100 }, authorityReadTransport),
+            readBadgeDefinitions(controller.signal, { limit: 100 }, authorityReadTransport),
+            readPrincipals(controller.signal, { limit: 100 }, authorityReadTransport),
           ]);
           setReadState({
             status: response.items.length ? "ready" : "empty",
             detail: response.items.length
-              ? "Badge grants loaded through Sentry authority reads."
+              ? `Badge grants loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
               : "No badge grants were returned for this session scope.",
             accounts: [],
             contexts: [],
@@ -432,11 +441,11 @@ export function AuthorityPlaceholderPage() {
         }
 
         if (module?.id === "audit") {
-          const response = await readAuthorityAuditEvents(controller.signal, { limit: 100 });
+          const response = await readAuthorityAuditEvents(controller.signal, { limit: 100 }, authorityReadTransport);
           setReadState({
             status: response.items.length ? "ready" : "empty",
             detail: response.items.length
-              ? "Authority audit events loaded through Sentry authority reads."
+              ? `Authority audit events loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
               : "No authority audit events were returned for this session scope.",
             accounts: [],
             contexts: [],
@@ -451,13 +460,13 @@ export function AuthorityPlaceholderPage() {
         }
 
         const [response, principals] = await Promise.all([
-          readPrincipalKeys(controller.signal, { limit: 100 }),
-          readPrincipals(controller.signal, { limit: 100 }),
+          readPrincipalKeys(controller.signal, { limit: 100 }, authorityReadTransport),
+          readPrincipals(controller.signal, { limit: 100 }, authorityReadTransport),
         ]);
         setReadState({
           status: response.items.length ? "ready" : "empty",
           detail: response.items.length
-            ? "Principal key posture loaded through Sentry authority reads."
+            ? `Principal key posture loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
             : "No principal keys were returned for this session scope.",
           accounts: [],
           contexts: [],
@@ -492,7 +501,7 @@ export function AuthorityPlaceholderPage() {
 
     void load();
     return () => controller.abort();
-  }, [module, refreshNonce]);
+  }, [module, refreshNonce, authorityReadTransport]);
 
   useEffect(() => {
     if (!module || !isMutationSurface(module.id)) {

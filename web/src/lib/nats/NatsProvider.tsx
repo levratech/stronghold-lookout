@@ -29,12 +29,14 @@ export function NatsProvider({ children }: PropsWithChildren) {
   const { snapshot } = useSession();
   const [state, setState] = useState(defaultState);
   const connectionRef = useRef<NatsConnection | null>(null);
+  const grantTokenRef = useRef<string | undefined>(undefined);
   const statusIteratorRef = useRef<Promise<void> | null>(null);
   const serverURL = getNatsServerURL();
 
   const disconnect = () => {
     connectionRef.current?.close();
     connectionRef.current = null;
+    grantTokenRef.current = undefined;
     setState({
       state: "disconnected",
       detail: "NATS WebSocket transport is closed.",
@@ -128,6 +130,7 @@ export function NatsProvider({ children }: PropsWithChildren) {
     }));
 
     let credsFile: string | undefined;
+    let grantToken: string | undefined;
     try {
       const grant = await requestBrowserTransportGrant(snapshot);
       if (!grant.transport_ready) {
@@ -139,6 +142,7 @@ export function NatsProvider({ children }: PropsWithChildren) {
         }));
         return;
       }
+      grantToken = grant.grant_token;
       credsFile = grant.native_credential?.creds_file;
       if (!credsFile) {
         setState((current) => ({
@@ -176,6 +180,7 @@ export function NatsProvider({ children }: PropsWithChildren) {
       });
 
       connectionRef.current = connection;
+      grantTokenRef.current = grantToken;
       setState((current) => ({
         ...current,
         state: "connected",
@@ -251,6 +256,7 @@ export function NatsProvider({ children }: PropsWithChildren) {
         ...state,
         serverURL,
         connection: connectionRef.current,
+        grantToken: grantTokenRef.current,
         connect: connectTransport,
         disconnect,
       }}
