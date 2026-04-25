@@ -194,9 +194,19 @@ export function OverviewPage() {
               <div className="kv__value">{String(snapshot.transport.ready)}</div>
             </div>
             <div className="kv">
+              <div className="kv__label">Grant Discovery</div>
+              <div className="kv__value">{snapshot.transport.grantReady ? "available" : "unavailable"}</div>
+            </div>
+            <div className="kv">
               <div className="kv__label">NATS Endpoint</div>
               <div className="kv__value">
                 <code>{snapshot.transport.path ?? nats.serverURL}</code>
+              </div>
+            </div>
+            <div className="kv">
+              <div className="kv__label">Grant Endpoint</div>
+              <div className="kv__value">
+                <code>{snapshot.transport.credentialPath ?? "Not exposed"}</code>
               </div>
             </div>
             <div className="kv">

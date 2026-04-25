@@ -53,8 +53,28 @@ export interface BadgeSummary {
 export interface SessionTransportState {
   path?: string;
   mode?: string;
+  grantReady?: boolean;
+  credentialPath?: string;
+  credentialMethod?: string;
+  credentialRail?: string;
+  credentialProfile?: string;
+  nativeRequired?: boolean;
   ready: boolean;
   detail: string;
+}
+
+export interface BrowserTransportGrantResponse {
+  status: string;
+  credential_format: string;
+  nats_native: boolean;
+  transport_ready: boolean;
+  grant_token: string;
+  claims: Record<string, unknown>;
+  native_credential?: {
+    user_jwt: string;
+    user_public_key: string;
+    creds_file: string;
+  };
 }
 
 export interface SessionSnapshot {

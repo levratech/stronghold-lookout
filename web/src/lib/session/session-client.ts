@@ -1,5 +1,10 @@
 import { lookoutEnvironment } from "../../env";
-import type { PrincipalType, SessionSnapshot } from "./session-types";
+import type {
+  BrowserTransportGrantResponse,
+  PrincipalType,
+  SessionSnapshot,
+  SessionTransportState,
+} from "./session-types";
 
 const authHintStorageKey = "lookout.session.hint";
 
@@ -8,6 +13,49 @@ const defaultTransport = {
   detail:
     "Browser transport credentials are not exposed to JavaScript. A session-backed transport rail is still pending.",
 };
+
+function normalizeTransport(rawTransport: Record<string, unknown> | null): SessionTransportState {
+  return {
+    path:
+      rawTransport && typeof rawTransport.path === "string"
+        ? rawTransport.path
+        : lookoutEnvironment.natsPath,
+    mode:
+      rawTransport && typeof rawTransport.mode === "string"
+        ? rawTransport.mode
+        : "session_backed",
+    grantReady:
+      rawTransport && typeof rawTransport.grant_ready === "boolean"
+        ? rawTransport.grant_ready
+        : false,
+    credentialPath:
+      rawTransport && typeof rawTransport.credential_path === "string"
+        ? rawTransport.credential_path
+        : undefined,
+    credentialMethod:
+      rawTransport && typeof rawTransport.credential_method === "string"
+        ? rawTransport.credential_method
+        : undefined,
+    credentialRail:
+      rawTransport && typeof rawTransport.credential_rail === "string"
+        ? rawTransport.credential_rail
+        : undefined,
+    credentialProfile:
+      rawTransport && typeof rawTransport.credential_profile === "string"
+        ? rawTransport.credential_profile
+        : undefined,
+    nativeRequired:
+      rawTransport && typeof rawTransport.native_required === "boolean"
+        ? rawTransport.native_required
+        : undefined,
+    ready:
+      rawTransport && typeof rawTransport.ready === "boolean" ? rawTransport.ready : false,
+    detail:
+      rawTransport && typeof rawTransport.detail === "string"
+        ? rawTransport.detail
+        : defaultTransport.detail,
+  };
+}
 
 function normalizeIdentity(raw: Record<string, unknown> | null | undefined) {
   if (!raw) {
@@ -175,27 +223,43 @@ export async function fetchSessionSnapshot(signal?: AbortSignal): Promise<Sessio
       count: typeof rawBadgeSummary?.count === "number" ? rawBadgeSummary.count : badgeIds.length,
     },
     validUntil: typeof payload.valid_until === "string" ? payload.valid_until : undefined,
-    transport: {
-      path:
-        rawTransport && typeof rawTransport.path === "string"
-          ? rawTransport.path
-          : lookoutEnvironment.natsPath,
-      mode:
-        rawTransport && typeof rawTransport.mode === "string"
-          ? rawTransport.mode
-          : "session_backed",
-      ready:
-        rawTransport && typeof rawTransport.ready === "boolean" ? rawTransport.ready : false,
-      detail:
-        rawTransport && typeof rawTransport.detail === "string"
-          ? rawTransport.detail
-          : defaultTransport.detail,
-    },
+    transport: normalizeTransport(rawTransport),
     detail:
       typeof payload.detail === "string"
         ? payload.detail
         : "Session bootstrap completed through the same-origin auth rail.",
   };
+}
+
+export async function requestBrowserTransportGrant(
+  snapshot: SessionSnapshot,
+  signal?: AbortSignal,
+): Promise<BrowserTransportGrantResponse> {
+  const credentialPath = snapshot.transport.credentialPath;
+  if (snapshot.status !== "authenticated" || !credentialPath || !snapshot.transport.grantReady) {
+    throw new Error("Browser transport grant is not available for the current session.");
+  }
+
+  const response = await fetch(credentialPath, {
+    method: snapshot.transport.credentialMethod ?? "POST",
+    credentials: "same-origin",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      rail: snapshot.transport.credentialRail ?? "browser_websocket",
+      profile: snapshot.transport.credentialProfile ?? "browser_session",
+      native_required: snapshot.transport.nativeRequired ?? true,
+    }),
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Browser transport grant returned ${response.status}.`);
+  }
+
+  return (await response.json()) as BrowserTransportGrantResponse;
 }
 
 export function persistAuthHint() {

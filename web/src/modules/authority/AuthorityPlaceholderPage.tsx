@@ -538,6 +538,10 @@ export function AuthorityPlaceholderPage() {
               <div className="kv__value">{String(snapshot.transport.ready)}</div>
             </div>
             <div className="kv">
+              <div className="kv__label">Grant Discovery</div>
+              <div className="kv__value">{snapshot.transport.grantReady ? "available" : "unavailable"}</div>
+            </div>
+            <div className="kv">
               <div className="kv__label">NATS State</div>
               <div className="kv__value">
                 <StatusPill tone={natsTone(nats.state)} label={nats.state} />

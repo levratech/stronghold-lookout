@@ -25,10 +25,10 @@
   "service_boundaries": {
     "cli_runtime": "Go/Cobra CLI for login, whoami, config get/set/push, message capture, and operator workflows over NATS.",
     "web_shell": "React/Vite browser cockpit with shell layout, static module registry, and read-first Overview, Sentry, Aegis, and Authority operator surfaces.",
-    "session_client": "Same-origin browser session boundary that opens Drawbridge auth, listens for callback completion, refreshes /_/auth/session, calls same-origin logout, and normalizes separate root and active principal metadata.",
+    "session_client": "Same-origin browser session boundary that opens Drawbridge auth, listens for callback completion, refreshes /_/auth/session, calls same-origin logout, normalizes separate root and active principal metadata, and discovers the Sentry browser transport grant path without storing credentials.",
     "authority_read_client": "Typed same-origin HTTP client for Sentry authority read surfaces under /_/authority/read without browser-visible transport credentials, including badge archive state, grant provenance, key posture, and authority audit-event readback.",
     "authority_mutation_client": "Typed same-origin HTTP client for controlled Sentry authority mutations under /_/authority/mutate with idempotency keys and operator confirmation states, including badge-definition, principal-badge grant, and principal-key lifecycle controls.",
-    "nats_browser_transport": "NATS over WebSocket browser rail used by the cockpit through /_/nats only when Sentry-minted delegated-principal NATS credentials are available and marked ready; the current shell reports transport posture honestly without reusing the static bootstrap token.",
+    "nats_browser_transport": "NATS over WebSocket browser rail used by the cockpit through /_/nats only when Sentry-minted delegated-principal NATS credentials are available and marked ready; the current shell can discover/request the same-origin grant path but still reports transport posture honestly without reusing the static bootstrap token.",
     "config_templates": "Tracked JSON files remain examples/templates rather than live estate truth."
   },
   "critical_invariants": [
@@ -36,7 +36,8 @@
     "Live edge config should come from generated Stronghold runtime artifacts, then be pushed via Lookout.",
     "The web cockpit assumes same-origin auth under /_/auth and NATS transport under /_/nats.",
     "The browser shell must not depend on reading the HttpOnly auth cookie directly; it consumes bootstrap/session payloads instead.",
-    "The browser shell must not receive or forward reusable transport credentials from session bootstrap payloads.",
+    "The browser shell must not receive reusable transport credentials from session bootstrap payloads.",
+    "The browser shell may request a short-lived scoped grant from the Sentry route advertised by session bootstrap, but must not store it in localStorage/sessionStorage.",
     "Static module registration is intentional and keeps the cockpit structure stable without runtime plugin machinery.",
     "Lookout displays principal, badge, key, audit, and transport posture and can submit controlled Sentry mutations; it does not own principal key registration, envelope verification, badge truth, audit truth, or authority issuance.",
     "Read-first Sentry/Aegis pages should stay honest about backend gaps rather than implying mature browser-admin APIs exist."
