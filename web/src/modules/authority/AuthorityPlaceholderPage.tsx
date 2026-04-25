@@ -903,6 +903,10 @@ function GrantList({ grants }: { grants: PrincipalBadgeGrantReadModel[] }) {
               granted by:{grant.granted_by_principal_id ?? "authority"} · reason:
               {grant.reason ?? "not recorded"}
             </div>
+            <div className="list-item__body">
+              grant:{grant.id} · created:{grant.created_at ?? "unknown"} · revoked:
+              {grant.revoked_at ?? "no"}
+            </div>
           </div>
           <StatusPill tone={grant.revoked_at ? "danger" : "success"} label={grant.revoked_at ? "revoked" : "active"} />
         </div>
@@ -974,8 +978,9 @@ function BadgeList({ badges }: { badges: BadgeDefinitionReadModel[] }) {
               badge:{badge.id} · context:{badge.context_id}
             </div>
             <div className="list-item__body">{badge.description ?? "No description"}</div>
+            <div className="list-item__body">archived:{badge.archived_at ?? "no"}</div>
           </div>
-          <StatusPill tone="neutral" label="definition" />
+          <StatusPill tone={badge.archived_at ? "warning" : "neutral"} label={badge.archived_at ? "archived" : "definition"} />
         </div>
       ))}
     </div>

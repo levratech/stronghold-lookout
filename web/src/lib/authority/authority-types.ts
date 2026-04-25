@@ -45,6 +45,7 @@ export interface BadgeDefinitionReadModel {
   context_id: string;
   name: string;
   description?: string;
+  archived_at?: string;
 }
 
 export interface PrincipalBadgeGrantReadModel {
