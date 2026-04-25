@@ -17,6 +17,8 @@ import {
   type NatsConnectionState,
   type NatsGrantPermissions,
   type NatsGrantPosture,
+  type NatsPermissionProbe,
+  type NatsPermissionProbeResult,
 } from "./nats-types";
 
 const NatsContext = createContext<NatsContextValue | null>(null);
@@ -40,9 +42,16 @@ const defaultState: Pick<
   grantPosture: undefined,
 };
 
+const idleProbe: NatsPermissionProbe = {
+  status: "idle",
+  detail: "Permission probe has not run in this tab.",
+  results: [],
+};
+
 export function NatsProvider({ children }: PropsWithChildren) {
   const { snapshot } = useSession();
   const [state, setState] = useState(defaultState);
+  const [permissionProbe, setPermissionProbe] = useState<NatsPermissionProbe>(idleProbe);
   const connectionRef = useRef<NatsConnection | null>(null);
   const grantTokenRef = useRef<string | undefined>(undefined);
   const statusIteratorRef = useRef<Promise<void> | null>(null);
@@ -61,6 +70,7 @@ export function NatsProvider({ children }: PropsWithChildren) {
       connectedServer: undefined,
       grantPosture: undefined,
     });
+    setPermissionProbe(idleProbe);
   };
 
   const watchConnection = async (connection: NatsConnection) => {
@@ -97,12 +107,22 @@ export function NatsProvider({ children }: PropsWithChildren) {
     }
 
     if (status.type === "error") {
+      const deniedAction = describeDeniedAction(status.data);
+      if (deniedAction) {
+        setState((current) => ({
+          ...current,
+          detail: "NATS denied an unauthorized browser action; the transport rail remains live.",
+          lastError: describeNatsError(status.data),
+          lastDeniedAction: deniedAction,
+        }));
+        return;
+      }
       setState((current) => ({
         ...current,
         state: "error",
         detail: "NATS transport reported an application-level error.",
         lastError: describeNatsError(status.data),
-        lastDeniedAction: describeDeniedAction(status.data) ?? current.lastDeniedAction,
+        lastDeniedAction: current.lastDeniedAction,
       }));
     }
   };
@@ -122,6 +142,7 @@ export function NatsProvider({ children }: PropsWithChildren) {
         lastDeniedAction: undefined,
         grantPosture: undefined,
       });
+      setPermissionProbe(idleProbe);
       return;
     }
 
@@ -291,6 +312,56 @@ export function NatsProvider({ children }: PropsWithChildren) {
     serverURL,
   ]);
 
+  const runPermissionProbe = async () => {
+    const connection = connectionRef.current;
+    const permissions = state.grantPosture?.permissions;
+    if (!connection || state.state !== "connected" || !permissions) {
+      setPermissionProbe({
+        status: "unavailable",
+        detail: "NATS permission probe requires a connected browser rail with grant permissions.",
+        results: [],
+      });
+      return;
+    }
+
+    setPermissionProbe({
+      status: "running",
+      detail: "Probing allowed and forbidden NATS subjects from the browser rail.",
+      ranAt: new Date().toISOString(),
+      results: [],
+    });
+
+    const stamp = Date.now().toString(36);
+    const allowedPub = concreteSubject(
+      permissions.pubAllow.find((subject) => subject.includes(".outbox.")) ?? permissions.pubAllow[0],
+      `rcd3.${stamp}.pub`,
+    );
+    const allowedSub = concreteSubject(
+      permissions.subAllow.find((subject) => subject.includes(".inbox.")) ??
+        permissions.subAllow.find((subject) => subject !== "_INBOX.>") ??
+        permissions.subAllow[0],
+      `rcd3.${stamp}.sub`,
+    );
+    const forbiddenPub = `stronghold.rcd3.forbidden.${stamp}.pub`;
+    const forbiddenSub = `stronghold.rcd3.forbidden.${stamp}.sub`;
+
+    const results: NatsPermissionProbeResult[] = [];
+    results.push(await expectSubscribe(connection, allowedSub, true));
+    results.push(await expectPublish(connection, allowedPub, true));
+    results.push(await expectSubscribe(connection, forbiddenSub, false));
+    results.push(await expectPublish(connection, forbiddenPub, false));
+
+    const passed = results.every((result) => result.expected === result.observed);
+    setPermissionProbe({
+      status: passed ? "passed" : "failed",
+      detail: passed
+        ? "Browser NATS permission probe matched expected allow/deny outcomes."
+        : "Browser NATS permission probe found an unexpected allow/deny outcome.",
+      ranAt: new Date().toISOString(),
+      results,
+    });
+  };
+
   return (
     <NatsContext.Provider
       value={{
@@ -299,13 +370,97 @@ export function NatsProvider({ children }: PropsWithChildren) {
         connection: connectionRef.current,
         grantToken: grantTokenRef.current,
         grantPosture: state.grantPosture,
+        permissionProbe,
         connect: connectTransport,
         disconnect,
+        runPermissionProbe,
       }}
     >
       {children}
     </NatsContext.Provider>
   );
+}
+
+function concreteSubject(pattern: string | undefined, suffix: string) {
+  if (!pattern) {
+    return `stronghold.rcd3.missing.${suffix}`;
+  }
+  if (pattern.endsWith(".>")) {
+    return `${pattern.slice(0, -2)}.${suffix}`;
+  }
+  if (pattern.includes("*")) {
+    return pattern.replaceAll("*", suffix.replaceAll(".", "-"));
+  }
+  return pattern;
+}
+
+async function expectSubscribe(connection: NatsConnection, subject: string, shouldAllow: boolean) {
+  const result: NatsPermissionProbeResult = {
+    step: "subscribe",
+    subject,
+    expected: shouldAllow ? "allowed" : "denied",
+    observed: "allowed",
+  };
+  const statusError = waitPermissionStatus(connection);
+  try {
+    const subscription = connection.subscribe(subject);
+    await connection.flush();
+    await subscription.unsubscribe();
+  } catch (error) {
+    result.observed = "denied";
+    result.error = describeNatsError(error);
+    return result;
+  }
+  const permissionError = await statusError;
+  if (permissionError) {
+    result.observed = "denied";
+    result.error = permissionError;
+  }
+  return result;
+}
+
+async function expectPublish(connection: NatsConnection, subject: string, shouldAllow: boolean) {
+  const result: NatsPermissionProbeResult = {
+    step: "publish",
+    subject,
+    expected: shouldAllow ? "allowed" : "denied",
+    observed: "allowed",
+  };
+  const statusError = waitPermissionStatus(connection);
+  try {
+    connection.publish(subject, new TextEncoder().encode("stronghold-rcd3-browser-probe"));
+    await connection.flush();
+  } catch (error) {
+    result.observed = "denied";
+    result.error = describeNatsError(error);
+    return result;
+  }
+  const permissionError = await statusError;
+  if (permissionError) {
+    result.observed = "denied";
+    result.error = permissionError;
+  }
+  return result;
+}
+
+async function waitPermissionStatus(connection: NatsConnection) {
+  const iterator = connection.status();
+  const timeout = new Promise<undefined>((resolve) => {
+    window.setTimeout(() => resolve(undefined), 500);
+  });
+  const status = (async () => {
+    for await (const entry of iterator) {
+      if (entry.type !== "error") {
+        continue;
+      }
+      const message = describeNatsError(entry.data);
+      if (/permission|permissions|authorization|not authorized|denied/i.test(message)) {
+        return message;
+      }
+    }
+    return undefined;
+  })();
+  return Promise.race([status, timeout]);
 }
 
 function grantPostureFromResponse(grant: BrowserTransportGrantResponse): NatsGrantPosture {

@@ -20,10 +20,12 @@ export interface NatsContextValue {
   connectedServer?: string;
   grantToken?: string;
   grantPosture?: NatsGrantPosture;
+  permissionProbe?: NatsPermissionProbe;
   connection?: NatsConnection | null;
   reconnects: number;
   connect: () => Promise<void>;
   disconnect: () => void;
+  runPermissionProbe: () => Promise<void>;
 }
 
 export interface NatsGrantPermissions {
@@ -48,6 +50,21 @@ export interface NatsGrantPosture {
   nativeCredential: boolean;
   userPublicKey?: string;
   permissions?: NatsGrantPermissions;
+}
+
+export interface NatsPermissionProbeResult {
+  step: "subscribe" | "publish";
+  subject: string;
+  expected: "allowed" | "denied";
+  observed: "allowed" | "denied";
+  error?: string;
+}
+
+export interface NatsPermissionProbe {
+  status: "idle" | "running" | "passed" | "failed" | "unavailable";
+  detail: string;
+  ranAt?: string;
+  results: NatsPermissionProbeResult[];
 }
 
 export function describeNatsError(error: NatsError | Error | unknown) {

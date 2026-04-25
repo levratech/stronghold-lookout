@@ -189,7 +189,18 @@ export function OverviewPage() {
           eyebrow="Control Rails"
           title="Browser Transport State"
           description="The shell centers the browser on same-origin auth and NATS rather than ad hoc page-specific endpoints."
-          actions={<StatusPill tone={natsTone(nats.state)} label={nats.state} />}
+          actions={
+            <div className="button-row">
+              <StatusPill tone={natsTone(nats.state)} label={nats.state} />
+              <button
+                className="button button--secondary"
+                disabled={nats.state !== "connected" || nats.permissionProbe?.status === "running"}
+                onClick={() => void nats.runPermissionProbe()}
+              >
+                {nats.permissionProbe?.status === "running" ? "Probing..." : "Run Permission Probe"}
+              </button>
+            </div>
+          }
         >
           <div className="kv-grid">
             <div className="kv">
@@ -249,6 +260,33 @@ export function OverviewPage() {
               <div className="kv__value">{formatPermissionSummary(grantPosture?.permissions)}</div>
             </div>
           </div>
+          <div className="empty-state">
+            <strong>Permission Probe:</strong>{" "}
+            {nats.permissionProbe
+              ? `${nats.permissionProbe.status} - ${nats.permissionProbe.detail}`
+              : "idle - Permission probe has not run in this tab."}
+          </div>
+          {nats.permissionProbe?.results.length ? (
+            <div className="list">
+              {nats.permissionProbe.results.map((result) => (
+                <div className="list-item" key={`${result.step}:${result.subject}`}>
+                  <div>
+                    <div className="list-item__title">
+                      {result.step} {result.subject}
+                    </div>
+                    <div className="list-item__body">
+                      expected:{result.expected} · observed:{result.observed}
+                      {result.error ? ` · ${result.error}` : ""}
+                    </div>
+                  </div>
+                  <StatusPill
+                    tone={result.expected === result.observed ? "success" : "danger"}
+                    label={result.observed}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : null}
           <div className="empty-state">{snapshot.transport.detail}</div>
         </Panel>
       </section>
