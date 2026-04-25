@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { Panel } from "../../components/ui/Panel";
 import { StatusPill } from "../../components/ui/StatusPill";
+import { useNats } from "../../lib/nats/NatsProvider";
+import { useSession } from "../../lib/session/SessionProvider";
 import {
   AuthorityReadError,
   readAccounts,
@@ -124,6 +126,36 @@ function statusTone(status: AuthorityLoadStatus) {
   }
 }
 
+function sessionTone(status: string) {
+  switch (status) {
+    case "authenticated":
+      return "success" as const;
+    case "authenticating":
+    case "degraded":
+    case "loading":
+      return "warning" as const;
+    case "error":
+    case "expired":
+      return "danger" as const;
+    default:
+      return "neutral" as const;
+  }
+}
+
+function natsTone(status: string) {
+  switch (status) {
+    case "connected":
+      return "success" as const;
+    case "connecting":
+    case "reconnecting":
+      return "warning" as const;
+    case "error":
+      return "danger" as const;
+    default:
+      return "neutral" as const;
+  }
+}
+
 function liveSurfaceLabel(moduleId: string) {
   switch (moduleId) {
     case "accounts":
@@ -152,6 +184,8 @@ function isLiveReadSurface(moduleId: string) {
 export function AuthorityPlaceholderPage() {
   const { surface } = useParams();
   const module = findModule(surface);
+  const { snapshot } = useSession();
+  const nats = useNats();
   const [readState, setReadState] = useState<LiveReadState>({
     status: "idle",
     detail: "This authority surface has not requested data yet.",
@@ -348,6 +382,7 @@ export function AuthorityPlaceholderPage() {
 
   const notes = surfaceNotes[module.id] ?? [];
   const isLiveSurface = isLiveReadSurface(module.id);
+  const activePrincipal = snapshot.activePrincipal ?? snapshot.root;
 
   return (
     <div className="page">
@@ -367,7 +402,9 @@ export function AuthorityPlaceholderPage() {
             description={readState.detail}
             actions={<StatusPill tone={statusTone(readState.status)} label={readState.status} />}
           >
-            {module.id === "accounts" ? (
+            {readState.status === "loading" || readState.status === "denied" || readState.status === "error" ? (
+              <AuthorityReadNotice status={readState.status} detail={readState.detail} sessionStatus={snapshot.status} />
+            ) : module.id === "accounts" ? (
               <AccountList accounts={readState.accounts} />
             ) : module.id === "identities" ? (
               <IdentityList identities={readState.identities} />
@@ -384,6 +421,49 @@ export function AuthorityPlaceholderPage() {
             )}
           </Panel>
         ) : null}
+
+        <Panel
+          eyebrow="Access State"
+          title="Session and Transport Posture"
+          description="Authority reads use same-origin Sentry HTTP. Browser NATS readiness is tracked separately so transport gaps are not mistaken for auth denial."
+          actions={<StatusPill tone={sessionTone(snapshot.status)} label={snapshot.status} />}
+        >
+          <div className="kv-grid">
+            <div className="kv">
+              <div className="kv__label">Operator</div>
+              <div className="kv__value">
+                {activePrincipal?.email ?? activePrincipal?.principalId ?? "No authenticated operator"}
+              </div>
+            </div>
+            <div className="kv">
+              <div className="kv__label">Session Source</div>
+              <div className="kv__value">{snapshot.source}</div>
+            </div>
+            <div className="kv">
+              <div className="kv__label">Browser Rail Ready</div>
+              <div className="kv__value">{String(snapshot.transport.ready)}</div>
+            </div>
+            <div className="kv">
+              <div className="kv__label">NATS State</div>
+              <div className="kv__value">
+                <StatusPill tone={natsTone(nats.state)} label={nats.state} />
+              </div>
+            </div>
+          </div>
+          {snapshot.status === "unauthenticated" ? (
+            <div className="state-notice state-notice--denied">
+              <div className="state-notice__title">No operator session is active.</div>
+              <div className="state-notice__body">
+                Use the Login control to complete Drawbridge auth before expecting authority reads to resolve.
+              </div>
+            </div>
+          ) : !snapshot.transport.ready ? (
+            <div className="state-notice state-notice--warning">
+              <div className="state-notice__title">Browser transport is not ready.</div>
+              <div className="state-notice__body">{snapshot.transport.detail}</div>
+            </div>
+          ) : null}
+        </Panel>
 
         <Panel
           eyebrow="Cockpit Surface"
@@ -414,6 +494,42 @@ export function AuthorityPlaceholderPage() {
           </div>
         </Panel>
       </section>
+    </div>
+  );
+}
+
+function AuthorityReadNotice({
+  status,
+  detail,
+  sessionStatus,
+}: {
+  status: AuthorityLoadStatus;
+  detail: string;
+  sessionStatus: string;
+}) {
+  const title =
+    status === "loading"
+      ? "Loading authority records."
+      : status === "denied" && sessionStatus === "unauthenticated"
+        ? "Authentication is required."
+        : status === "denied"
+          ? "Authority read denied."
+          : "Authority read failed.";
+  const body =
+    status === "denied" && sessionStatus === "unauthenticated"
+      ? "No same-origin operator session is active, so the Sentry read adapter cannot be reached with authority."
+      : detail;
+  const className =
+    status === "loading"
+      ? "state-notice state-notice--loading"
+      : status === "denied"
+        ? "state-notice state-notice--denied"
+        : "state-notice state-notice--error";
+
+  return (
+    <div className={className}>
+      <div className="state-notice__title">{title}</div>
+      <div className="state-notice__body">{body}</div>
     </div>
   );
 }
