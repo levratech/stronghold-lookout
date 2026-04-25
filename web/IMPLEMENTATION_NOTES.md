@@ -19,13 +19,13 @@
 
 ## What Is Placeholder Or Pending Backend Support
 
-- Browser transport remains intentionally pending until the Phase 7 delegated-principal NATS credential model is implemented by Sentry/NATS and exposed through the browser WebSocket rail.
+- Browser transport can request a Sentry-minted delegated-principal NATS credential, but live connection still depends on native credential configuration and the NATS WebSocket rail accepting that credential.
 - No browser-safe Aegis read surface currently exposes interfaces, routes, or live config state.
 - The tracked JSON files in this repo are not used as live estate truth.
 
 ## Backend Surfaces Needed Next
 
-1. Implement the Sentry-minted delegated-principal NATS credential model described in `stronghold/docs/browser-nats-authorization-model.md`; do not reuse the static bootstrap NATS token for browser, CLI, desktop, service, node, or agent actors.
+1. Prove the Sentry-minted delegated-principal NATS credential model end to end against the live `/_/nats` rail; do not reuse the static bootstrap NATS token for browser, CLI, desktop, service, node, or agent actors.
 2. Flip session bootstrap `transport.ready=true` only after the browser can connect over `/_/nats` with a principal-scoped credential and negative subject-policy tests pass.
 3. Add explicit Aegis read adapters for interface listing, route inspection, access requirements, and live config provenance/status.
 4. Expand verified command envelope coverage before sensitive browser-originated commands move onto the transport rail.

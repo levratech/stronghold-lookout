@@ -109,7 +109,7 @@ const surfaceNotes: Record<string, string[]> = {
   ],
   transport: [
     "Show browser transport readiness separately from login state.",
-    "Keep transport ready=false until the session-backed NATS rail is designed.",
+    "Request only short-lived scoped credentials through the session-backed grant route.",
     "Never expose reusable NATS credentials to browser JavaScript.",
   ],
   audit: [
@@ -185,9 +185,13 @@ function natsTone(status: string) {
     case "connected":
       return "success" as const;
     case "connecting":
+    case "credentialing":
     case "reconnecting":
       return "warning" as const;
     case "error":
+    case "auth_error":
+    case "credential_error":
+    case "rail_error":
       return "danger" as const;
     default:
       return "neutral" as const;

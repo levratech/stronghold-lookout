@@ -6,9 +6,10 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
-import { connect, type NatsConnection, type Status } from "nats.ws";
+import { connect, credsAuthenticator, type NatsConnection, type Status } from "nats.ws";
 import { getNatsServerURL } from "../../env";
 import { useSession } from "../session/SessionProvider";
+import { requestBrowserTransportGrant } from "../session/session-client";
 import { describeNatsError, type NatsContextValue, type NatsConnectionState } from "./nats-types";
 
 const NatsContext = createContext<NatsContextValue | null>(null);
@@ -86,7 +87,18 @@ export function NatsProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    if (!snapshot.transport.ready) {
+    if (snapshot.status !== "authenticated") {
+      setState({
+        state: "auth_error",
+        detail: "An authenticated browser session is required before requesting NATS transport.",
+        reconnects: 0,
+        connectedServer: undefined,
+        lastError: undefined,
+      });
+      return;
+    }
+
+    if (!snapshot.transport.grantReady || !snapshot.transport.credentialPath) {
       setState({
         state: "disconnected",
         detail: snapshot.transport.detail,
@@ -99,15 +111,46 @@ export function NatsProvider({ children }: PropsWithChildren) {
 
     setState((current) => ({
       ...current,
-      state: "connecting",
-      detail: `Connecting to estate transport at ${serverURL}.`,
+      state: "credentialing",
+      detail: "Requesting a short-lived principal-scoped NATS credential through the current session.",
       lastError: undefined,
     }));
 
+    let credsFile: string | undefined;
     try {
+      const grant = await requestBrowserTransportGrant(snapshot);
+      credsFile = grant.native_credential?.creds_file;
+      if (!credsFile) {
+        setState((current) => ({
+          ...current,
+          state: "credential_error",
+          detail: "Sentry issued a transport grant, but no native NATS credential was returned.",
+          lastError: grant.nats_native ? undefined : "Grant response was not NATS-native.",
+        }));
+        return;
+      }
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        state: "credential_error",
+        detail: "Unable to obtain a scoped NATS credential through the current session.",
+        lastError: describeNatsError(error),
+      }));
+      return;
+    }
+
+    try {
+      setState((current) => ({
+        ...current,
+        state: "connecting",
+        detail: `Connecting to estate transport at ${serverURL}.`,
+        lastError: undefined,
+      }));
+
       const connection = await connect({
         name: "Stronghold Lookout Web",
         servers: serverURL,
+        authenticator: credsAuthenticator(new TextEncoder().encode(credsFile)),
         maxReconnectAttempts: -1,
         reconnectTimeWait: 2_000,
       });
@@ -144,9 +187,9 @@ export function NatsProvider({ children }: PropsWithChildren) {
     } catch (error) {
       setState((current) => ({
         ...current,
-        state: "error",
+        state: "rail_error",
         detail:
-          "Unable to establish the browser transport. This usually means the `/_/nats` rail is not exposed yet or the current session is not accepted there.",
+          "Unable to establish the browser transport after obtaining a scoped credential.",
         lastError: describeNatsError(error),
       }));
     }
@@ -155,6 +198,13 @@ export function NatsProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (snapshot.status === "unauthenticated") {
       disconnect();
+      setState({
+        state: "auth_error",
+        detail: "No authenticated browser session is available for NATS transport.",
+        reconnects: 0,
+        connectedServer: undefined,
+        lastError: undefined,
+      });
       return;
     }
 
@@ -162,7 +212,17 @@ export function NatsProvider({ children }: PropsWithChildren) {
     return () => {
       disconnect();
     };
-  }, [snapshot.status, snapshot.transport.ready, snapshot.transport.detail, serverURL]);
+  }, [
+    snapshot.status,
+    snapshot.transport.grantReady,
+    snapshot.transport.credentialPath,
+    snapshot.transport.credentialMethod,
+    snapshot.transport.credentialRail,
+    snapshot.transport.credentialProfile,
+    snapshot.transport.nativeRequired,
+    snapshot.transport.detail,
+    serverURL,
+  ]);
 
   return (
     <NatsContext.Provider

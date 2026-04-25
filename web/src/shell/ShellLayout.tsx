@@ -25,9 +25,13 @@ function natsTone(status: string) {
     case "connected":
       return "success" as const;
     case "connecting":
+    case "credentialing":
     case "reconnecting":
       return "warning" as const;
     case "error":
+    case "auth_error":
+    case "credential_error":
+    case "rail_error":
       return "danger" as const;
     default:
       return "neutral" as const;

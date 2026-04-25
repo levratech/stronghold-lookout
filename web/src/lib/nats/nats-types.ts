@@ -2,9 +2,13 @@ import type { NatsConnection, NatsError } from "nats.ws";
 
 export type NatsConnectionState =
   | "disconnected"
+  | "credentialing"
   | "connecting"
   | "connected"
   | "reconnecting"
+  | "auth_error"
+  | "credential_error"
+  | "rail_error"
   | "error";
 
 export interface NatsContextValue {

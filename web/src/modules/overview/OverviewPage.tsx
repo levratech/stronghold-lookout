@@ -25,9 +25,13 @@ function natsTone(status: string) {
     case "connected":
       return "success" as const;
     case "connecting":
+    case "credentialing":
     case "reconnecting":
       return "warning" as const;
     case "error":
+    case "auth_error":
+    case "credential_error":
+    case "rail_error":
       return "danger" as const;
     default:
       return "neutral" as const;
@@ -267,9 +271,9 @@ export function OverviewPage() {
               <div>
                 <div className="list-item__title">Missing Backend Surface</div>
                 <div className="list-item__body">
-                  The session bootstrap now exposes root and active principal metadata, but
-                  browser transport credentialing remains intentionally unfinished so reusable
-                  transport secrets do not leak into JavaScript.
+                  The session bootstrap now exposes root/active principal metadata and grant
+                  discovery; live browser transport still depends on Sentry returning native
+                  scoped credentials and the NATS WebSocket rail accepting them.
                 </div>
               </div>
             </div>

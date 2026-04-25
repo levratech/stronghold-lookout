@@ -1,7 +1,7 @@
 {
   "name": "stronghold-lookout",
   "purpose": "Operator tooling repo for Stronghold, now spanning both the Go CLI runtime and a React/TypeScript web cockpit for same-origin auth, NATS transport, and estate visibility.",
-  "status": "active CLI plus web cockpit repo with principal-aware session state, production-shaped browser shell, read-first authority/edge surfaces, controlled authority mutations, and key lifecycle audit readback",
+  "status": "active CLI plus web cockpit repo with principal-aware session state, production-shaped browser shell, read-first authority/edge surfaces, controlled authority mutations, key lifecycle audit readback, and grant-backed NATS WebSocket connection flow",
   "repo_role_in_system": "Operator control surface and config tooling for the Stronghold estate",
   "related_repos": [
     "stronghold",
@@ -28,7 +28,7 @@
     "session_client": "Same-origin browser session boundary that opens Drawbridge auth, listens for callback completion, refreshes /_/auth/session, calls same-origin logout, normalizes separate root and active principal metadata, and discovers the Sentry browser transport grant path without storing credentials.",
     "authority_read_client": "Typed same-origin HTTP client for Sentry authority read surfaces under /_/authority/read without browser-visible transport credentials, including badge archive state, grant provenance, key posture, and authority audit-event readback.",
     "authority_mutation_client": "Typed same-origin HTTP client for controlled Sentry authority mutations under /_/authority/mutate with idempotency keys and operator confirmation states, including badge-definition, principal-badge grant, and principal-key lifecycle controls.",
-    "nats_browser_transport": "NATS over WebSocket browser rail used by the cockpit through /_/nats only when Sentry-minted delegated-principal NATS credentials are available and marked ready; the current shell can discover/request the same-origin grant path but still reports transport posture honestly without reusing the static bootstrap token.",
+    "nats_browser_transport": "NATS over WebSocket browser rail used by the cockpit through /_/nats after requesting a Sentry-minted delegated-principal native NATS credential through the same-origin grant path; the static bootstrap token is never used as a browser credential.",
     "config_templates": "Tracked JSON files remain examples/templates rather than live estate truth."
   },
   "critical_invariants": [
@@ -38,6 +38,7 @@
     "The browser shell must not depend on reading the HttpOnly auth cookie directly; it consumes bootstrap/session payloads instead.",
     "The browser shell must not receive reusable transport credentials from session bootstrap payloads.",
     "The browser shell may request a short-lived scoped grant from the Sentry route advertised by session bootstrap, but must not store it in localStorage/sessionStorage.",
+    "Browser NATS state must distinguish session/auth failure, credential minting failure, and WebSocket rail failure.",
     "Static module registration is intentional and keeps the cockpit structure stable without runtime plugin machinery.",
     "Lookout displays principal, badge, key, audit, and transport posture and can submit controlled Sentry mutations; it does not own principal key registration, envelope verification, badge truth, audit truth, or authority issuance.",
     "Read-first Sentry/Aegis pages should stay honest about backend gaps rather than implying mature browser-admin APIs exist."
