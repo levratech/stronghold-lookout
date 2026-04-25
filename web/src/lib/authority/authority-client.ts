@@ -1,4 +1,8 @@
 import { lookoutEnvironment } from "../../env";
+import {
+  commandAuthHeaderValue,
+  signCommandPayload,
+} from "../command-signing/command-signing";
 import type {
   AccountReadModel,
   AuthorityAuditEventReadModel,
@@ -22,6 +26,14 @@ import type {
   PrincipalKeyReadModel,
   PrincipalReadModel,
 } from "./authority-types";
+
+const commandAuthHeader = "X-Stronghold-Command-Auth";
+
+export interface AuthorityMutationSigningOptions {
+  principalId: string;
+  identityId?: string;
+  keyId?: string;
+}
 
 interface AuthorityListResponse<T> {
   page: PageInfo;
@@ -106,17 +118,33 @@ async function readJSON<T>(
 async function mutateJSON<T extends object>(
   command: AuthorityMutationCommand,
   payload: T,
+  signing?: AuthorityMutationSigningOptions,
 ): Promise<AuthorityMutationResult> {
+  const body = JSON.stringify(payload);
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+    "Idempotency-Key": crypto.randomUUID(),
+    "X-Stronghold-Mutation-Reason": "Lookout cockpit operator request",
+  };
+  if (signing && authorityMutationRequiresSignature(command)) {
+    const signedData = {
+      command_type: command,
+      payload,
+    };
+    const signature = await signCommandPayload({
+      principalId: signing.principalId,
+      keyId: signing.keyId,
+      data: signedData,
+    });
+    headers[commandAuthHeader] = commandAuthHeaderValue(signature, signing.identityId);
+  }
+
   const response = await fetch(authorityMutationURL(command), {
     method: "POST",
     credentials: "same-origin",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "Idempotency-Key": crypto.randomUUID(),
-      "X-Stronghold-Mutation-Reason": "Lookout cockpit operator request",
-    },
-    body: JSON.stringify(payload),
+    headers,
+    body,
   });
   const result = (await response.json()) as AuthorityMutationResult;
   if (!response.ok || result.status !== "accepted") {
@@ -127,6 +155,15 @@ async function mutateJSON<T extends object>(
     );
   }
   return result;
+}
+
+export function authorityMutationRequiresSignature(command: AuthorityMutationCommand) {
+  return [
+    "principal_badge.grant",
+    "principal_badge.revoke",
+    "principal_key.revoke",
+    "principal_key.rotate",
+  ].includes(command);
 }
 
 function normalizeList<T>(payload: RawAuthorityListResponse<T>, key: keyof RawAuthorityListResponse<T>) {
@@ -212,54 +249,54 @@ export async function readAuthorityAuditEvents(signal?: AbortSignal, filter?: Au
   return normalizeList(payload, "audit_events") as AuthorityListResponse<AuthorityAuditEventReadModel>;
 }
 
-export function createAccount(payload: CreateAccountPayload) {
-  return mutateJSON("account.create", payload);
+export function createAccount(payload: CreateAccountPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("account.create", payload, signing);
 }
 
-export function createIdentity(payload: CreateIdentityPayload) {
-  return mutateJSON("identity.create", payload);
+export function createIdentity(payload: CreateIdentityPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("identity.create", payload, signing);
 }
 
-export function createDurablePrincipal(payload: CreateDurablePrincipalPayload) {
-  return mutateJSON("principal.create_durable", payload);
+export function createDurablePrincipal(payload: CreateDurablePrincipalPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("principal.create_durable", payload, signing);
 }
 
-export function createContext(payload: ContextMutationPayload) {
-  return mutateJSON("context.create", payload);
+export function createContext(payload: ContextMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("context.create", payload, signing);
 }
 
-export function updateContext(payload: ContextMutationPayload) {
-  return mutateJSON("context.update", payload);
+export function updateContext(payload: ContextMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("context.update", payload, signing);
 }
 
-export function createBadgeDefinition(payload: BadgeDefinitionMutationPayload) {
-  return mutateJSON("badge_definition.create", payload);
+export function createBadgeDefinition(payload: BadgeDefinitionMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("badge_definition.create", payload, signing);
 }
 
-export function updateBadgeDefinition(payload: BadgeDefinitionMutationPayload) {
-  return mutateJSON("badge_definition.update", payload);
+export function updateBadgeDefinition(payload: BadgeDefinitionMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("badge_definition.update", payload, signing);
 }
 
-export function archiveBadgeDefinition(payload: BadgeDefinitionMutationPayload) {
-  return mutateJSON("badge_definition.archive", payload);
+export function archiveBadgeDefinition(payload: BadgeDefinitionMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("badge_definition.archive", payload, signing);
 }
 
-export function grantPrincipalBadge(payload: PrincipalBadgeGrantMutationPayload) {
-  return mutateJSON("principal_badge.grant", payload);
+export function grantPrincipalBadge(payload: PrincipalBadgeGrantMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("principal_badge.grant", payload, signing);
 }
 
-export function revokePrincipalBadge(payload: PrincipalBadgeGrantMutationPayload) {
-  return mutateJSON("principal_badge.revoke", payload);
+export function revokePrincipalBadge(payload: PrincipalBadgeGrantMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("principal_badge.revoke", payload, signing);
 }
 
 export function registerPrincipalKey(payload: PrincipalKeyMutationPayload) {
   return mutateJSON("principal_key.register", payload);
 }
 
-export function revokePrincipalKey(payload: PrincipalKeyMutationPayload) {
-  return mutateJSON("principal_key.revoke", payload);
+export function revokePrincipalKey(payload: PrincipalKeyMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("principal_key.revoke", payload, signing);
 }
 
-export function rotatePrincipalKey(payload: PrincipalKeyMutationPayload) {
-  return mutateJSON("principal_key.rotate", payload);
+export function rotatePrincipalKey(payload: PrincipalKeyMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("principal_key.rotate", payload, signing);
 }

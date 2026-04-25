@@ -20,13 +20,16 @@
   Ed25519 command-signing key for the active principal, store it in IndexedDB,
   register only the rawurl-base64 public key with Sentry, select the matching
   active key record, and run a local signing smoke check.
+- Controlled authority mutations attach Level 3 command-auth signatures for the
+  first enforced sensitive set: principal badge grant/revoke and principal key
+  revoke/rotate.
 
 ## What Is Placeholder Or Pending Backend Support
 
 - Browser transport can request a Sentry-minted delegated-principal NATS credential, but live connection still depends on native credential configuration and the NATS WebSocket rail accepting that credential.
-- Browser command-signing keys can be generated and registered, but verified
-  envelope enforcement for sensitive mutations remains a Stronghold BTR-04
-  backend follow-up.
+- Browser command-signing keys can be generated and registered, and first-slice
+  verified command-auth enforcement is live for badge grant/revoke and key
+  revoke/rotate. Broader mutation coverage is still deliberate follow-up work.
 - No browser-safe Aegis read surface currently exposes interfaces, routes, or live config state.
 - The tracked JSON files in this repo are not used as live estate truth.
 
@@ -34,7 +37,7 @@
 
 1. Prove the Sentry-minted delegated-principal NATS credential model end to end against the live `/_/nats` rail; do not reuse the static bootstrap NATS token for browser, CLI, desktop, service, node, or agent actors.
 2. Flip session bootstrap `transport.ready=true` only after the browser can connect over `/_/nats` with a principal-scoped credential and negative subject-policy tests pass.
-3. Require and verify Level 3 signed command envelopes for sensitive cockpit mutations now that Lookout Web has a browser/principal Ed25519 signer lifecycle.
+3. Expand Level 3 signed command-envelope coverage beyond badge grant/revoke and key revoke/rotate as each sensitive mutation family gets tests and recovery posture.
 4. Add explicit Aegis read adapters for interface listing, route inspection, access requirements, and live config provenance/status.
 5. Expand verified command envelope coverage before sensitive browser-originated commands move onto the transport rail.
 

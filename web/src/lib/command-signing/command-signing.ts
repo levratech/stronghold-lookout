@@ -231,11 +231,13 @@ export async function signCommandPayload({
   principalId,
   keyId,
   data,
+  dataJSON,
   ttlSeconds = defaultEnvelopeTTLSeconds,
 }: {
   principalId: string;
   keyId?: string;
   data: unknown;
+  dataJSON?: string;
   ttlSeconds?: number;
 }): Promise<CommandPayloadSignature> {
   const key = await getStoredCommandSigningKey(principalId, keyId);
@@ -246,14 +248,16 @@ export async function signCommandPayload({
   const issuedAt = new Date();
   const expiresAt = new Date(issuedAt.getTime() + ttlSeconds * 1000);
   const nonce = crypto.randomUUID();
-  const dataJSON = JSON.stringify(data ?? null);
+  const signedDataJSON = dataJSON ?? JSON.stringify(data ?? null);
+  const issuedAtText = formatRFC3339NanoLikeGo(issuedAt);
+  const expiresAtText = formatRFC3339NanoLikeGo(expiresAt);
   const signingPayloadJSON = await signingPayloadJSONFor({
     principalId,
     keyId: key.key_id,
-    issuedAt: issuedAt.toISOString(),
-    expiresAt: expiresAt.toISOString(),
+    issuedAt: issuedAtText,
+    expiresAt: expiresAtText,
     nonce,
-    dataJSON,
+    dataJSON: signedDataJSON,
   });
   const signature = await crypto.subtle.sign(
     { name: webCryptoAlgorithmName },
@@ -265,14 +269,26 @@ export async function signCommandPayload({
     principalId,
     keyId: key.key_id,
     algorithm: strongholdAlgorithmName,
-    issuedAt: issuedAt.toISOString(),
-    expiresAt: expiresAt.toISOString(),
+    issuedAt: issuedAtText,
+    expiresAt: expiresAtText,
     nonce,
     data,
-    dataJSON,
+    dataJSON: signedDataJSON,
     signingPayloadJSON,
     principalSignature: base64RawURL(new Uint8Array(signature)),
   };
+}
+
+export function commandAuthHeaderValue(signature: CommandPayloadSignature, identityId?: string) {
+  return base64RawURL(new TextEncoder().encode(JSON.stringify({
+    principal_sig: signature.principalSignature,
+    identity_id: identityId || undefined,
+    principal_id: signature.principalId,
+    key_id: signature.keyId,
+    iat: signature.issuedAt,
+    exp: signature.expiresAt,
+    nonce: signature.nonce,
+  })));
 }
 
 export async function buildSignedCommandEnvelope({
@@ -432,4 +448,11 @@ function base64RawURL(bytes: Uint8Array) {
     binary += String.fromCharCode(byte);
   }
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+function formatRFC3339NanoLikeGo(date: Date) {
+  return date
+    .toISOString()
+    .replace(".000Z", "Z")
+    .replace(/(\.\d*?[1-9])0+Z$/, "$1Z");
 }

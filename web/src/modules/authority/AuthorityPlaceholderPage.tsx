@@ -8,6 +8,7 @@ import { useSession } from "../../lib/session/SessionProvider";
 import {
   AuthorityReadError,
   AuthorityMutationError,
+  authorityMutationRequiresSignature,
   archiveBadgeDefinition,
   createAccount,
   createBadgeDefinition,
@@ -29,10 +30,12 @@ import {
   rotatePrincipalKey,
   updateBadgeDefinition,
   updateContext,
+  type AuthorityMutationSigningOptions,
 } from "../../lib/authority/authority-client";
 import type {
   AccountReadModel,
   AuthorityAuditEventReadModel,
+  AuthorityMutationCommand,
   AuthorityMutationResult,
   AuthorityLoadStatus,
   BadgeDefinitionReadModel,
@@ -492,10 +495,10 @@ export function AuthorityPlaceholderPage() {
   }, [module, refreshNonce]);
 
   useEffect(() => {
-    if (!module || module.id !== "keys") {
+    if (!module || !isMutationSurface(module.id)) {
       setCommandSigningState({
         status: "idle",
-        detail: "Command-signing posture is shown on the principal keys surface.",
+        detail: "Command-signing posture is checked on authority mutation surfaces.",
       });
       return;
     }
@@ -508,7 +511,13 @@ export function AuthorityPlaceholderPage() {
       detail: "Checking browser-local Ed25519 command-signing posture.",
     }));
 
-    void getCommandSigningPosture(principalId, readState.keys)
+    const visibleKeys = readState.keys;
+    const postureKeys = visibleKeys.length
+      ? Promise.resolve(visibleKeys)
+      : readPrincipalKeys(undefined, { limit: 100 }).then((response) => response.items);
+
+    void postureKeys
+      .then((keys) => getCommandSigningPosture(principalId, keys))
       .then((posture) => {
         if (cancelled) {
           return;
@@ -540,6 +549,14 @@ export function AuthorityPlaceholderPage() {
 
   const notes = surfaceNotes[module.id] ?? [];
   const isLiveSurface = isLiveReadSurface(module.id);
+  const signingOptions =
+    commandSigningState.posture?.status === "ready" && activePrincipal?.principalId
+      ? {
+          principalId: activePrincipal.principalId,
+          identityId: activePrincipal.identityId,
+          keyId: commandSigningState.posture.keyId,
+        }
+      : undefined;
 
   async function createBrowserCommandSigningKey() {
     const principalId = activePrincipal?.principalId;
@@ -740,6 +757,7 @@ export function AuthorityPlaceholderPage() {
             readState={readState}
             snapshotContextId={activePrincipal?.contextId ?? ""}
             mutationState={mutationState}
+            signingOptions={signingOptions}
             onState={setMutationState}
             onAccepted={() => setRefreshNonce((value) => value + 1)}
           />
@@ -811,6 +829,7 @@ function AuthorityMutationPanel({
   readState,
   snapshotContextId,
   mutationState,
+  signingOptions,
   onState,
   onAccepted,
 }: {
@@ -818,6 +837,7 @@ function AuthorityMutationPanel({
   readState: LiveReadState;
   snapshotContextId: string;
   mutationState: MutationState;
+  signingOptions?: AuthorityMutationSigningOptions;
   onState: (state: MutationState) => void;
   onAccepted: () => void;
 }) {
@@ -826,7 +846,7 @@ function AuthorityMutationPanel({
     const form = new FormData(event.currentTarget);
     onState({ status: "submitting", detail: "Submitting controlled authority mutation through Sentry." });
     try {
-      const result = await submitAuthorityMutation(moduleId, form);
+      const result = await submitAuthorityMutation(moduleId, form, signingOptions);
       onState({
         status: "accepted",
         detail: `${result.resource_type ?? "resource"} ${result.resource_id ?? ""} accepted by Sentry.`,
@@ -1268,30 +1288,37 @@ function KeyMutationFields({
   );
 }
 
-async function submitAuthorityMutation(moduleId: string, form: FormData) {
+async function submitAuthorityMutation(
+  moduleId: string,
+  form: FormData,
+  signingOptions?: AuthorityMutationSigningOptions,
+) {
   if (moduleId === "accounts") {
+    const command: AuthorityMutationCommand = "account.create";
     return createAccount({
       domain_id: textValue(form, "domain_id"),
       email: textValue(form, "email"),
       account_id: optionalTextValue(form, "account_id"),
       provider_id: optionalTextValue(form, "provider_id"),
-    });
+    }, signingFor(command, signingOptions));
   }
   if (moduleId === "identities") {
+    const command: AuthorityMutationCommand = "identity.create";
     return createIdentity({
       account_id: textValue(form, "account_id"),
       context_id: textValue(form, "context_id"),
       identity_id: optionalTextValue(form, "identity_id"),
       principal_id: optionalTextValue(form, "principal_id"),
-    });
+    }, signingFor(command, signingOptions));
   }
   if (moduleId === "principals") {
+    const command: AuthorityMutationCommand = "principal.create_durable";
     return createDurablePrincipal({
       principal_type: textValue(form, "principal_type") as "node" | "app" | "service" | "durable_agent" | "agent" | "managed",
       parent_principal_id: optionalTextValue(form, "parent_principal_id"),
       context_id: optionalTextValue(form, "context_id"),
       principal_id: optionalTextValue(form, "principal_id"),
-    });
+    }, signingFor(command, signingOptions));
   }
   if (moduleId === "badges") {
     const payload = {
@@ -1300,13 +1327,13 @@ async function submitAuthorityMutation(moduleId: string, form: FormData) {
       name: optionalTextValue(form, "name"),
       description: optionalTextValue(form, "description"),
     };
-    const command = textValue(form, "badge_command");
+    const command = textValue(form, "badge_command") as AuthorityMutationCommand;
     if (command === "badge_definition.archive") {
-      return archiveBadgeDefinition(payload);
+      return archiveBadgeDefinition(payload, signingFor(command, signingOptions));
     }
     return command === "badge_definition.update"
-      ? updateBadgeDefinition(payload)
-      : createBadgeDefinition(payload);
+      ? updateBadgeDefinition(payload, signingFor(command, signingOptions))
+      : createBadgeDefinition(payload, signingFor("badge_definition.create", signingOptions));
   }
   if (moduleId === "grants") {
     const payload = {
@@ -1316,9 +1343,10 @@ async function submitAuthorityMutation(moduleId: string, form: FormData) {
       permission: textValue(form, "permission"),
       reason: optionalTextValue(form, "reason"),
     };
-    return textValue(form, "grant_command") === "principal_badge.revoke"
-      ? revokePrincipalBadge(payload)
-      : grantPrincipalBadge(payload);
+    const command = textValue(form, "grant_command") as AuthorityMutationCommand;
+    return command === "principal_badge.revoke"
+      ? revokePrincipalBadge(payload, signingFor(command, signingOptions))
+      : grantPrincipalBadge(payload, signingFor("principal_badge.grant", signingOptions));
   }
   if (moduleId === "keys") {
     const payload = {
@@ -1328,22 +1356,38 @@ async function submitAuthorityMutation(moduleId: string, form: FormData) {
       algorithm: optionalTextValue(form, "algorithm"),
       public_key: optionalTextValue(form, "public_key"),
     };
-    const command = textValue(form, "key_command");
+    const command = textValue(form, "key_command") as AuthorityMutationCommand;
     if (command === "principal_key.revoke") {
-      return revokePrincipalKey(payload);
+      return revokePrincipalKey(payload, signingFor(command, signingOptions));
     }
     return command === "principal_key.rotate"
-      ? rotatePrincipalKey(payload)
+      ? rotatePrincipalKey(payload, signingFor(command, signingOptions))
       : registerPrincipalKey(payload);
   }
+  const command: AuthorityMutationCommand = textValue(form, "context_command") === "context.update"
+    ? "context.update"
+    : "context.create";
   const payload = {
     name: textValue(form, "name"),
     context_id: optionalTextValue(form, "context_id"),
     parent_id: optionalTextValue(form, "parent_id"),
   };
-  return textValue(form, "context_command") === "context.update"
-    ? updateContext(payload)
-    : createContext(payload);
+  return command === "context.update"
+    ? updateContext(payload, signingFor(command, signingOptions))
+    : createContext(payload, signingFor(command, signingOptions));
+}
+
+function signingFor(
+  command: AuthorityMutationCommand,
+  signingOptions?: AuthorityMutationSigningOptions,
+) {
+  if (!authorityMutationRequiresSignature(command)) {
+    return undefined;
+  }
+  if (!signingOptions?.principalId || !signingOptions.keyId) {
+    throw new Error("Level 3 command signing is required. Generate and register a browser Ed25519 key on the Keys surface, or use Lookout Desktop.");
+  }
+  return signingOptions;
 }
 
 function textValue(form: FormData, name: string) {
