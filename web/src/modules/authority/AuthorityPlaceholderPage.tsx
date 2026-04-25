@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Navigate, useParams } from "react-router-dom";
+import { connect, credsAuthenticator, type NatsConnection } from "nats.ws";
 import { Panel } from "../../components/ui/Panel";
 import { StatusPill } from "../../components/ui/StatusPill";
 import { useNats } from "../../lib/nats/NatsProvider";
+import { describeNatsError, type NatsPermissionProbeResult } from "../../lib/nats/nats-types";
 import { useSession } from "../../lib/session/SessionProvider";
 import {
   AuthorityReadError,
@@ -46,6 +48,7 @@ import type {
   PrincipalReadModel,
 } from "../../lib/authority/authority-types";
 import {
+  commandAuthHeaderValue,
   generateAndStoreBrowserCommandSigningKey,
   getCommandSigningPosture,
   signCommandPayload,
@@ -119,8 +122,8 @@ const surfaceNotes: Record<string, string[]> = {
   ],
   transport: [
     "Show browser transport readiness separately from login state.",
-    "Request only short-lived scoped credentials through the session-backed grant route.",
-    "Never expose reusable NATS credentials to browser JavaScript.",
+    "Request only short-lived scoped credentials through session-backed or signed delegated grant routes.",
+    "Exercise service and agent delegated credentials without rendering native creds material.",
   ],
   audit: [
     "Show authority audit events as evidence, not as canonical authority state.",
@@ -239,6 +242,10 @@ function isMutationSurface(moduleId: string) {
   return ["accounts", "identities", "contexts", "principals", "badges", "grants", "keys"].includes(moduleId);
 }
 
+function isCommandSigningSurface(moduleId: string) {
+  return isMutationSurface(moduleId) || moduleId === "transport";
+}
+
 type MutationState =
   | { status: "idle"; detail: string; result?: undefined }
   | { status: "submitting"; detail: string; result?: undefined }
@@ -250,6 +257,24 @@ interface CommandSigningState {
   detail: string;
   posture?: CommandSigningPosture;
   smoke?: CommandPayloadSignature;
+}
+
+type DelegatedTransportDrillState =
+  | { status: "idle"; detail: string; result?: undefined }
+  | { status: "running"; detail: string; result?: undefined }
+  | { status: "passed" | "failed" | "error"; detail: string; result?: DelegatedTransportDrillResult };
+
+interface DelegatedTransportDrillResult {
+  credentialPrincipalId?: string;
+  activePrincipalId?: string;
+  rail?: string;
+  profile?: string;
+  expiresAt?: string;
+  permissions?: {
+    pubAllow: string[];
+    subAllow: string[];
+  };
+  probeResults: NatsPermissionProbeResult[];
 }
 
 export function AuthorityPlaceholderPage() {
@@ -504,10 +529,10 @@ export function AuthorityPlaceholderPage() {
   }, [module, refreshNonce, authorityReadTransport]);
 
   useEffect(() => {
-    if (!module || !isMutationSurface(module.id)) {
+    if (!module || !isCommandSigningSurface(module.id)) {
       setCommandSigningState({
         status: "idle",
-        detail: "Command-signing posture is checked on authority mutation surfaces.",
+        detail: "Command-signing posture is checked on authority mutation and delegated transport surfaces.",
       });
       return;
     }
@@ -805,6 +830,16 @@ export function AuthorityPlaceholderPage() {
           />
         ) : null}
 
+        {module.id === "transport" ? (
+          <DelegatedTransportDrillPanel
+            state={commandSigningState}
+            activePrincipalId={activePrincipal?.principalId}
+            activeIdentityId={activePrincipal?.identityId}
+            activeContextId={activePrincipal?.contextId}
+            natsServerURL={nats.serverURL}
+          />
+        ) : null}
+
         <Panel
           eyebrow="Non-Goals"
           title="Authority Boundary"
@@ -1026,6 +1061,214 @@ function BrowserCommandSigningPanel({
       <div className="empty-state">
         This is for Level 3 Stronghold access only. If native WebCrypto Ed25519 is unavailable,
         use Lookout Desktop rather than a fallback algorithm or JavaScript crypto polyfill.
+      </div>
+    </Panel>
+  );
+}
+
+function DelegatedTransportDrillPanel({
+  state,
+  activePrincipalId,
+  activeIdentityId,
+  activeContextId,
+  natsServerURL,
+}: {
+  state: CommandSigningState;
+  activePrincipalId?: string;
+  activeIdentityId?: string;
+  activeContextId?: string;
+  natsServerURL: string;
+}) {
+  const [drillState, setDrillState] = useState<DelegatedTransportDrillState>({
+    status: "idle",
+    detail: "Delegated service/agent transport drill has not run in this tab.",
+  });
+  const ready = state.posture?.status === "ready" && activePrincipalId && state.posture.keyId;
+  const busy = drillState.status === "running";
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const targetPrincipalId = String(form.get("principal_id") ?? "").trim();
+    const rail = String(form.get("rail") ?? "service_runtime").trim();
+    const profile = String(form.get("profile") ?? "").trim();
+
+    if (!activePrincipalId || !state.posture?.keyId) {
+      setDrillState({
+        status: "error",
+        detail: "A ready active-principal command-signing key is required before requesting delegated transport.",
+      });
+      return;
+    }
+    if (!targetPrincipalId) {
+      setDrillState({ status: "error", detail: "Target service or agent principal ID is required." });
+      return;
+    }
+
+    setDrillState({
+      status: "running",
+      detail: "Requesting a signed delegated native NATS credential and probing scoped subjects.",
+    });
+
+    let delegatedConnection: NatsConnection | undefined;
+    try {
+      const payload = {
+        principal_id: targetPrincipalId,
+        rail,
+        ...(profile ? { profile } : {}),
+        native_required: true,
+      };
+      const body = JSON.stringify(payload);
+      const signature = await signCommandPayload({
+        principalId: activePrincipalId,
+        keyId: state.posture.keyId,
+        data: {
+          command_type: "nats_transport_credential.issue",
+          payload,
+        },
+      });
+      const response = await fetch("/_/transport/nats/credential", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "Idempotency-Key": crypto.randomUUID(),
+          "X-Stronghold-Command-Auth": commandAuthHeaderValue(signature, activeIdentityId),
+        },
+        body,
+      });
+      const grant = (await response.json()) as DelegatedTransportGrantResponse;
+      if (!response.ok) {
+        throw new Error(grant.message ?? `Delegated transport credential returned ${response.status}.`);
+      }
+      const credsFile = grant.native_credential?.creds_file;
+      if (!grant.transport_ready || !grant.nats_native || !credsFile) {
+        throw new Error("Delegated native credential was issued without a ready NATS rail.");
+      }
+
+      delegatedConnection = await connect({
+        servers: natsServerURL,
+        authenticator: credsAuthenticator(new TextEncoder().encode(credsFile)),
+      });
+
+      const permissions = {
+        pubAllow: stringArrayClaim((grant.claims?.permissions as Record<string, unknown> | undefined)?.pub_allow),
+        subAllow: stringArrayClaim((grant.claims?.permissions as Record<string, unknown> | undefined)?.sub_allow),
+      };
+      const stamp = Date.now().toString(36);
+      const allowedPub =
+        concreteDrillSubject(
+          permissions.pubAllow.find((subject) => subject.includes(".permission.services.invoke.")) ??
+            permissions.pubAllow.find((subject) => subject.includes(".permission.agents.")) ??
+            permissions.pubAllow.find((subject) => subject.includes(".outbox.")) ??
+            permissions.pubAllow[0],
+          `rcd5.${stamp}.allowed`,
+        );
+      const forbiddenPub = `stronghold.authority.read.rcd5.${stamp}`;
+      const otherContext = "550e8400-e29b-41d4-a716-446655442222";
+      const otherContextPub = `context.${otherContext}.permission.services.invoke.rcd5.${stamp}`;
+      const results: NatsPermissionProbeResult[] = [
+        await expectDrillPublish(delegatedConnection, allowedPub, true),
+        await expectDrillPublish(delegatedConnection, forbiddenPub, false),
+        await expectDrillPublish(delegatedConnection, otherContextPub, false),
+      ];
+      const passed = results.every((result) => result.expected === result.observed);
+      setDrillState({
+        status: passed ? "passed" : "failed",
+        detail: passed
+          ? "Delegated service/agent NATS credential matched expected scoped allow/deny behavior."
+          : "Delegated service/agent NATS credential produced an unexpected allow/deny result.",
+        result: {
+          credentialPrincipalId: stringClaim(grant.claims, "principal_id"),
+          activePrincipalId: stringClaim(grant.claims, "active_principal_id"),
+          rail: stringClaim(grant.claims, "rail"),
+          profile: stringClaim(grant.claims, "profile"),
+          expiresAt: timeClaim(grant.claims, "exp"),
+          permissions,
+          probeResults: results,
+        },
+      });
+    } catch (error) {
+      setDrillState({
+        status: "error",
+        detail: error instanceof Error ? error.message : "Delegated transport drill failed.",
+      });
+    } finally {
+      delegatedConnection?.close();
+    }
+  }
+
+  return (
+    <Panel
+      eyebrow="RCD-05 Drill"
+      title="Delegated Service/Agent Transport"
+      description="Requests a short-lived native NATS credential for a service or agent principal using the active principal's command signature, then probes allowed and forbidden subjects."
+      actions={<StatusPill tone={drillTone(drillState.status)} label={drillState.status} />}
+    >
+      <form className="authority-form" onSubmit={submit}>
+        <div className="authority-form__grid">
+          <label>
+            Service or Agent Principal ID
+            <input name="principal_id" required />
+          </label>
+          <label>
+            Rail
+            <select name="rail" defaultValue="service_runtime">
+              <option value="service_runtime">service_runtime</option>
+              <option value="agent_runtime">agent_runtime</option>
+              <option value="desktop_node">desktop_node</option>
+            </select>
+          </label>
+          <label>
+            Profile (optional)
+            <input name="profile" placeholder="service, durable_agent, desktop_node" />
+          </label>
+          <label>
+            Active Context
+            <input value={activeContextId ?? "Unavailable"} readOnly />
+          </label>
+        </div>
+        <div className="button-row">
+          <button className="button" type="submit" disabled={busy || !ready}>
+            Run Delegated Transport Drill
+          </button>
+        </div>
+      </form>
+      <div className={`state-notice ${drillState.status === "passed" ? "state-notice--success" : drillState.status === "running" ? "state-notice--loading" : drillState.status === "idle" ? "" : "state-notice--error"}`}>
+        <div className="state-notice__title">Delegated Transport Result</div>
+        <div className="state-notice__body">{drillState.detail}</div>
+      </div>
+      {drillState.result ? (
+        <div className="list">
+          <div className="list-item">
+            <div>
+              <div className="list-item__title">Credential Principal</div>
+              <div className="list-item__body">
+                {drillState.result.credentialPrincipalId ?? "unknown"} · {drillState.result.rail ?? "rail unknown"} ·{" "}
+                {drillState.result.profile ?? "profile unknown"}
+              </div>
+              <div className="list-item__body">expires:{drillState.result.expiresAt ?? "unknown"}</div>
+            </div>
+            <StatusPill tone="success" label="short-lived" />
+          </div>
+          {drillState.result.probeResults.map((result) => (
+            <div className="list-item" key={`${result.step}-${result.subject}`}>
+              <div>
+                <div className="list-item__title">
+                  {result.step} {result.expected}
+                </div>
+                <div className="list-item__body">{result.subject}</div>
+                {result.error ? <div className="list-item__body">{result.error}</div> : null}
+              </div>
+              <StatusPill tone={result.expected === result.observed ? "success" : "danger"} label={result.observed} />
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div className="empty-state">
+        The native creds file is kept in memory for this probe and is not rendered. This drill is for service,
+        node, app, durable-agent, managed, or ephemeral runtime principals owned by the active authority root.
       </div>
     </Panel>
   );
@@ -1481,6 +1724,107 @@ function commandSigningTone(
     return "warning" as const;
   }
   return "neutral" as const;
+}
+
+function drillTone(status: DelegatedTransportDrillState["status"]) {
+  switch (status) {
+    case "passed":
+      return "success" as const;
+    case "running":
+    case "idle":
+      return "warning" as const;
+    default:
+      return "danger" as const;
+  }
+}
+
+interface DelegatedTransportGrantResponse {
+  status?: string;
+  message?: string;
+  nats_native?: boolean;
+  transport_ready?: boolean;
+  grant_token?: string;
+  claims?: Record<string, unknown>;
+  native_credential?: {
+    creds_file?: string;
+  };
+}
+
+function concreteDrillSubject(pattern: string | undefined, suffix: string) {
+  if (!pattern) {
+    return `stronghold.rcd5.missing.${suffix}`;
+  }
+  if (pattern.endsWith(".>")) {
+    return `${pattern.slice(0, -2)}.${suffix}`;
+  }
+  if (pattern.includes("*")) {
+    return pattern.replaceAll("*", suffix.replaceAll(".", "-"));
+  }
+  return pattern;
+}
+
+async function expectDrillPublish(connection: NatsConnection, subject: string, shouldAllow: boolean) {
+  const result: NatsPermissionProbeResult = {
+    step: "publish",
+    subject,
+    expected: shouldAllow ? "allowed" : "denied",
+    observed: "allowed",
+  };
+  const statusError = waitDrillPermissionStatus(connection);
+  try {
+    connection.publish(subject, new TextEncoder().encode("stronghold-rcd5-delegated-transport-probe"));
+    await connection.flush();
+  } catch (error) {
+    result.observed = "denied";
+    result.error = describeNatsError(error);
+    return result;
+  }
+  const permissionError = await statusError;
+  if (permissionError) {
+    result.observed = "denied";
+    result.error = permissionError;
+  }
+  return result;
+}
+
+async function waitDrillPermissionStatus(connection: NatsConnection) {
+  const iterator = connection.status();
+  const timeout = new Promise<undefined>((resolve) => {
+    window.setTimeout(() => resolve(undefined), 500);
+  });
+  const status = (async () => {
+    for await (const entry of iterator) {
+      if (entry.type !== "error") {
+        continue;
+      }
+      const message = describeNatsError(entry.data);
+      if (/permission|permissions|authorization|not authorized|denied/i.test(message)) {
+        return message;
+      }
+    }
+    return undefined;
+  })();
+  return Promise.race([status, timeout]);
+}
+
+function stringClaim(claims: Record<string, unknown> | undefined, key: string) {
+  const value = claims?.[key];
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function timeClaim(claims: Record<string, unknown> | undefined, key: string) {
+  const value = claims?.[key];
+  if (typeof value === "string" && value) {
+    return value;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return new Date(value * 1000).toISOString();
+  }
+  return undefined;
+}
+
+function stringArrayClaim(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
 function PrincipalList({ principals }: { principals: PrincipalReadModel[] }) {

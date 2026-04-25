@@ -159,7 +159,7 @@ export const lookoutModules: LookoutModuleDefinition[] = [
     requiredCapabilities: ["transport:read"],
     summary: "Transport state stays separate from authentication and authority.",
     surfaceLabel: "Control Rail",
-    entryHint: "Reports unavailable honestly until Phase 7 makes the browser rail real.",
+    entryHint: "Shows browser rail posture and signed delegated service/agent transport drills without rendering native creds.",
   },
   {
     id: "audit",
