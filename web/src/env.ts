@@ -8,6 +8,8 @@ export const lookoutEnvironment = {
   cockpitName: import.meta.env.VITE_LOOKOUT_COCKPIT_NAME ?? "Lookout Cockpit",
   authBasePath: import.meta.env.VITE_LOOKOUT_AUTH_BASE_PATH ?? "/_/auth",
   authProvider: import.meta.env.VITE_LOOKOUT_AUTH_PROVIDER ?? "google",
+  authProvidersPath:
+    import.meta.env.VITE_LOOKOUT_AUTH_PROVIDERS_PATH ?? "/_/auth/providers",
   sessionBootstrapPath:
     import.meta.env.VITE_LOOKOUT_SESSION_BOOTSTRAP_PATH ?? "/_/auth/session",
   logoutPath: import.meta.env.VITE_LOOKOUT_LOGOUT_PATH ?? "/_/auth/logout",

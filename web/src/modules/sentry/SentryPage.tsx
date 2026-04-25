@@ -1,11 +1,81 @@
+import { useEffect, useState } from "react";
 import { Panel } from "../../components/ui/Panel";
 import { StatusPill } from "../../components/ui/StatusPill";
+import { lookoutEnvironment } from "../../env";
 import { buildSentrySections } from "../../lib/domain/sentry";
 import { useSession } from "../../lib/session/SessionProvider";
+
+interface AuthProviderPosture {
+  provider_id: string;
+  provider: string;
+  context_id?: string;
+  interface?: string;
+  configured: boolean;
+  redacted: boolean;
+  status: string;
+  missing_headers?: string[];
+}
+
+type ProviderLoadState =
+  | { status: "loading"; providers: AuthProviderPosture[]; detail: string }
+  | { status: "ready"; providers: AuthProviderPosture[]; detail: string }
+  | { status: "error"; providers: AuthProviderPosture[]; detail: string };
 
 export function SentryPage() {
   const { snapshot } = useSession();
   const sections = buildSentrySections(snapshot);
+  const [providerState, setProviderState] = useState<ProviderLoadState>({
+    status: "loading",
+    providers: [],
+    detail: "Checking same-origin auth provider posture.",
+  });
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadProviders() {
+      try {
+        const response = await fetch(lookoutEnvironment.authProvidersPath, {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error(`Provider posture returned ${response.status}.`);
+        }
+        const payload = (await response.json()) as { auth_providers?: unknown };
+        const providers = Array.isArray(payload.auth_providers)
+          ? payload.auth_providers.filter(
+              (provider): provider is AuthProviderPosture =>
+                typeof provider === "object" &&
+                provider !== null &&
+                typeof (provider as AuthProviderPosture).provider_id === "string",
+            )
+          : [];
+        setProviderState({
+          status: "ready",
+          providers,
+          detail: "Provider posture loaded through the same-origin Drawbridge rail.",
+        });
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+        const detail =
+          error instanceof Error
+            ? error.message
+            : "Unknown provider posture failure.";
+        setProviderState({
+          status: "error",
+          providers: [],
+          detail,
+        });
+      }
+    }
+
+    void loadProviders();
+    return () => controller.abort();
+  }, []);
 
   return (
     <div className="page">
@@ -70,6 +140,40 @@ export function SentryPage() {
                   : "No badge payload"}
               </div>
             </div>
+          </div>
+        </Panel>
+
+        <Panel
+          eyebrow="Auth Providers"
+          title="Provider Posture"
+          description="Read-only provider configuration status from Drawbridge. Secret-bearing values stay redacted."
+          actions={
+            <StatusPill
+              tone={providerState.status === "ready" ? "success" : "warning"}
+              label={providerState.status}
+            />
+          }
+        >
+          <div className="list">
+            {providerState.providers.length ? (
+              providerState.providers.map((provider) => (
+                <div className="list-item" key={provider.provider_id}>
+                  <div>
+                    <div className="list-item__title">{provider.provider}</div>
+                    <div className="list-item__body">
+                      {provider.interface ?? "unknown interface"} ·{" "}
+                      {provider.context_id ?? "unknown context"} · {provider.status}
+                    </div>
+                  </div>
+                  <StatusPill
+                    tone={provider.configured ? "success" : "warning"}
+                    label={provider.redacted ? "redacted" : "check payload"}
+                  />
+                </div>
+              ))
+            ) : (
+              <div className="empty-state">{providerState.detail}</div>
+            )}
           </div>
         </Panel>
 
