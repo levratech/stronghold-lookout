@@ -1,6 +1,19 @@
 import type { ReactNode } from "react";
 
-export type LookoutModuleId = "overview" | "sentry" | "aegis";
+export type LookoutModuleId =
+  | "overview"
+  | "accounts"
+  | "identities"
+  | "contexts"
+  | "badges"
+  | "grants"
+  | "principals"
+  | "keys"
+  | "providers"
+  | "transport"
+  | "audit"
+  | "sentry"
+  | "aegis";
 
 export interface LookoutModuleDefinition {
   id: LookoutModuleId;
@@ -32,17 +45,134 @@ export const lookoutModules: LookoutModuleDefinition[] = [
     entryHint: "Default command deck for operators entering the estate.",
   },
   {
-    id: "sentry",
-    name: "Sentry",
-    navLabel: "Sentry",
-    route: "/sentry",
-    icon: "SE",
-    description: "Authority, identities, badges, and operator context.",
+    id: "accounts",
+    name: "Accounts",
+    navLabel: "Accounts",
+    route: "/authority/accounts",
+    icon: "AC",
+    description: "Account records and user-level ownership roots.",
     status: "partial",
-    requiredCapabilities: ["identity:read", "badges:read"],
-    summary: "Authority-facing structure for users, badges, assignments, and session detail.",
+    requiredCapabilities: ["accounts:read"],
+    summary: "Account inventory and enrollment posture for identities owned by users.",
     surfaceLabel: "Authority Surface",
-    entryHint: "Read-first now; prepared for identity inventory and badge assignment next.",
+    entryHint: "Placeholder now; becomes the account/user read surface in this phase.",
+  },
+  {
+    id: "identities",
+    name: "Identities",
+    navLabel: "Identities",
+    route: "/authority/identities",
+    icon: "ID",
+    description: "Identity records, paired principals, and lineage.",
+    status: "partial",
+    requiredCapabilities: ["identities:read"],
+    summary: "Identity graph view across account, context, and principal relationships.",
+    surfaceLabel: "Authority Surface",
+    entryHint: "Placeholder now; becomes the identity lineage read surface in this phase.",
+  },
+  {
+    id: "contexts",
+    name: "Contexts",
+    navLabel: "Contexts",
+    route: "/authority/contexts",
+    icon: "CX",
+    description: "Context tree and scoped authority boundaries.",
+    status: "partial",
+    requiredCapabilities: ["contexts:read"],
+    summary: "Context hierarchy and scoping surface for authority decisions.",
+    surfaceLabel: "Authority Surface",
+    entryHint: "Placeholder now; becomes the context read surface in this phase.",
+  },
+  {
+    id: "badges",
+    name: "Badges",
+    navLabel: "Badges",
+    route: "/authority/badges",
+    icon: "BA",
+    description: "Badge catalog and context-scoped authority labels.",
+    status: "partial",
+    requiredCapabilities: ["badges:read"],
+    summary: "Badge definitions before any grant/revoke mutations are exposed.",
+    surfaceLabel: "Authority Surface",
+    entryHint: "Placeholder now; becomes the badge catalog read surface in this phase.",
+  },
+  {
+    id: "grants",
+    name: "Grants",
+    navLabel: "Grants",
+    route: "/authority/grants",
+    icon: "GR",
+    description: "Principal badge grants and revocation posture.",
+    status: "partial",
+    requiredCapabilities: ["grants:read"],
+    summary: "Explicit permissions granted to principals, including revoked state.",
+    surfaceLabel: "Authority Surface",
+    entryHint: "Placeholder now; becomes the grant inspection surface in this phase.",
+  },
+  {
+    id: "principals",
+    name: "Principals",
+    navLabel: "Principals",
+    route: "/authority/principals",
+    icon: "PR",
+    description: "Human, service, agent, and ephemeral principal posture.",
+    status: "partial",
+    requiredCapabilities: ["principals:read"],
+    summary: "Root/active principal relationships and principal type visibility.",
+    surfaceLabel: "Authority Surface",
+    entryHint: "Placeholder now; becomes the principal lineage surface in this phase.",
+  },
+  {
+    id: "keys",
+    name: "Keys",
+    navLabel: "Keys",
+    route: "/authority/keys",
+    icon: "KY",
+    description: "Principal key records, status, expiry, and revocation posture.",
+    status: "partial",
+    requiredCapabilities: ["keys:read"],
+    summary: "Cryptographic key metadata without exposing key material.",
+    surfaceLabel: "Authority Surface",
+    entryHint: "Placeholder now; becomes the principal-key posture surface in this phase.",
+  },
+  {
+    id: "providers",
+    name: "Providers",
+    navLabel: "Providers",
+    route: "/authority/providers",
+    icon: "PV",
+    description: "Auth provider posture and redacted configuration health.",
+    status: "partial",
+    requiredCapabilities: ["providers:read"],
+    summary: "Drawbridge provider status without OAuth secrets.",
+    surfaceLabel: "Auth Surface",
+    entryHint: "Provider posture is already visible; this page becomes its stable cockpit home.",
+  },
+  {
+    id: "transport",
+    name: "Transport",
+    navLabel: "Transport",
+    route: "/authority/transport",
+    icon: "TR",
+    description: "Browser rail readiness and NATS session posture.",
+    status: "partial",
+    requiredCapabilities: ["transport:read"],
+    summary: "Transport state stays separate from authentication and authority.",
+    surfaceLabel: "Control Rail",
+    entryHint: "Reports unavailable honestly until Phase 7 makes the browser rail real.",
+  },
+  {
+    id: "audit",
+    name: "Audit",
+    navLabel: "Audit",
+    route: "/authority/audit",
+    icon: "AU",
+    description: "Future authority audit events and decision history.",
+    status: "partial",
+    requiredCapabilities: ["audit:read"],
+    summary: "Placeholder for later mutation/key/session audit evidence.",
+    surfaceLabel: "Evidence Surface",
+    entryHint: "Explicit placeholder; audit storage and reads are later roadmap work.",
   },
   {
     id: "aegis",

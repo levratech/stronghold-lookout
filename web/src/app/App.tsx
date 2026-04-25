@@ -3,6 +3,7 @@ import { ShellLayout } from "../shell/ShellLayout";
 import { OverviewPage } from "../modules/overview/OverviewPage";
 import { SentryPage } from "../modules/sentry/SentryPage";
 import { AegisPage } from "../modules/aegis/AegisPage";
+import { AuthorityPlaceholderPage } from "../modules/authority/AuthorityPlaceholderPage";
 import { SessionProvider } from "../lib/session/SessionProvider";
 import { NatsProvider } from "../lib/nats/NatsProvider";
 
@@ -15,6 +16,7 @@ export function App() {
             <Route index element={<OverviewPage />} />
             <Route path="sentry" element={<SentryPage />} />
             <Route path="aegis" element={<AegisPage />} />
+            <Route path="authority/:surface" element={<AuthorityPlaceholderPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
