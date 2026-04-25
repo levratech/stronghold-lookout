@@ -102,3 +102,56 @@ export type AuthorityReadSurface =
   | "keys";
 
 export type AuthorityLoadStatus = "idle" | "loading" | "ready" | "denied" | "empty" | "error";
+
+export type AuthorityMutationCommand =
+  | "account.create"
+  | "identity.create"
+  | "principal.create_durable"
+  | "context.create"
+  | "context.update";
+
+export type AuthorityMutationStatus = "accepted" | "denied" | "invalid" | "error";
+
+export interface AuthorityMutationResult {
+  status: AuthorityMutationStatus;
+  command_type?: AuthorityMutationCommand;
+  command_id?: string;
+  idempotency_key?: string;
+  actor_principal_id?: string;
+  target_context_id?: string;
+  resource_type?: string;
+  resource_id?: string;
+  message?: string;
+  error_code?: string;
+  correlation_id?: string;
+  decided_at: string;
+}
+
+export interface CreateAccountPayload {
+  account_id?: string;
+  domain_id: string;
+  email: string;
+  password?: string;
+  provider_id?: string;
+}
+
+export interface CreateIdentityPayload {
+  identity_id?: string;
+  account_id: string;
+  context_id: string;
+  principal_id?: string;
+}
+
+export interface CreateDurablePrincipalPayload {
+  principal_id?: string;
+  account_id?: string;
+  context_id?: string;
+  principal_type: "node" | "app" | "service" | "durable_agent" | "agent" | "managed";
+  parent_principal_id?: string;
+}
+
+export interface ContextMutationPayload {
+  context_id?: string;
+  parent_id?: string;
+  name: string;
+}

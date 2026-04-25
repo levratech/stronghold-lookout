@@ -4,8 +4,14 @@ import type {
   AuthorityOverviewReadModel,
   AuthorityReadFilter,
   AuthorityReadSurface,
+  AuthorityMutationCommand,
+  AuthorityMutationResult,
   BadgeDefinitionReadModel,
   ContextReadModel,
+  ContextMutationPayload,
+  CreateAccountPayload,
+  CreateDurablePrincipalPayload,
+  CreateIdentityPayload,
   IdentityReadModel,
   PageInfo,
   PrincipalBadgeGrantReadModel,
@@ -39,6 +45,18 @@ export class AuthorityReadError extends Error {
   }
 }
 
+export class AuthorityMutationError extends Error {
+  status: number;
+  result?: AuthorityMutationResult;
+
+  constructor(status: number, message: string, result?: AuthorityMutationResult) {
+    super(message);
+    this.name = "AuthorityMutationError";
+    this.status = status;
+    this.result = result;
+  }
+}
+
 function authorityReadURL(surface: AuthorityReadSurface, filter: AuthorityReadFilter = {}) {
   const base =
     surface === "overview"
@@ -52,6 +70,10 @@ function authorityReadURL(surface: AuthorityReadSurface, filter: AuthorityReadFi
     url.searchParams.set(key, String(value));
   }
   return url;
+}
+
+function authorityMutationURL(command: AuthorityMutationCommand) {
+  return new URL(`/_/authority/mutate/${command}`, window.location.origin);
 }
 
 async function readJSON<T>(
@@ -74,6 +96,32 @@ async function readJSON<T>(
   }
 
   return (await response.json()) as T;
+}
+
+async function mutateJSON<T extends object>(
+  command: AuthorityMutationCommand,
+  payload: T,
+): Promise<AuthorityMutationResult> {
+  const response = await fetch(authorityMutationURL(command), {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "Idempotency-Key": crypto.randomUUID(),
+      "X-Stronghold-Mutation-Reason": "Lookout cockpit operator request",
+    },
+    body: JSON.stringify(payload),
+  });
+  const result = (await response.json()) as AuthorityMutationResult;
+  if (!response.ok || result.status !== "accepted") {
+    throw new AuthorityMutationError(
+      response.status,
+      result.message ?? `Authority mutation returned ${response.status}.`,
+      result,
+    );
+  }
+  return result;
 }
 
 function normalizeList<T>(payload: RawAuthorityListResponse<T>, key: keyof RawAuthorityListResponse<T>) {
@@ -148,4 +196,24 @@ export async function readPrincipalKeys(signal?: AbortSignal, filter?: Authority
     filter,
   );
   return normalizeList(payload, "principal_keys") as AuthorityListResponse<PrincipalKeyReadModel>;
+}
+
+export function createAccount(payload: CreateAccountPayload) {
+  return mutateJSON("account.create", payload);
+}
+
+export function createIdentity(payload: CreateIdentityPayload) {
+  return mutateJSON("identity.create", payload);
+}
+
+export function createDurablePrincipal(payload: CreateDurablePrincipalPayload) {
+  return mutateJSON("principal.create_durable", payload);
+}
+
+export function createContext(payload: ContextMutationPayload) {
+  return mutateJSON("context.create", payload);
+}
+
+export function updateContext(payload: ContextMutationPayload) {
+  return mutateJSON("context.update", payload);
 }

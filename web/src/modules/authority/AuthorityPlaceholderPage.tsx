@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { Panel } from "../../components/ui/Panel";
 import { StatusPill } from "../../components/ui/StatusPill";
@@ -6,6 +7,11 @@ import { useNats } from "../../lib/nats/NatsProvider";
 import { useSession } from "../../lib/session/SessionProvider";
 import {
   AuthorityReadError,
+  AuthorityMutationError,
+  createAccount,
+  createContext,
+  createDurablePrincipal,
+  createIdentity,
   readAccounts,
   readBadgeDefinitions,
   readBadgeGrants,
@@ -13,9 +19,11 @@ import {
   readIdentities,
   readPrincipalKeys,
   readPrincipals,
+  updateContext,
 } from "../../lib/authority/authority-client";
 import type {
   AccountReadModel,
+  AuthorityMutationResult,
   AuthorityLoadStatus,
   BadgeDefinitionReadModel,
   ContextReadModel,
@@ -181,11 +189,26 @@ function isLiveReadSurface(moduleId: string) {
   return ["accounts", "identities", "contexts", "badges", "principals", "grants", "keys"].includes(moduleId);
 }
 
+function isMutationSurface(moduleId: string) {
+  return ["accounts", "identities", "contexts", "principals"].includes(moduleId);
+}
+
+type MutationState =
+  | { status: "idle"; detail: string; result?: undefined }
+  | { status: "submitting"; detail: string; result?: undefined }
+  | { status: "accepted"; detail: string; result: AuthorityMutationResult }
+  | { status: "denied" | "invalid" | "error"; detail: string; result?: AuthorityMutationResult };
+
 export function AuthorityPlaceholderPage() {
   const { surface } = useParams();
   const module = findModule(surface);
   const { snapshot } = useSession();
   const nats = useNats();
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const [mutationState, setMutationState] = useState<MutationState>({
+    status: "idle",
+    detail: "Mutation controls are idle.",
+  });
   const [readState, setReadState] = useState<LiveReadState>({
     status: "idle",
     detail: "This authority surface has not requested data yet.",
@@ -374,7 +397,7 @@ export function AuthorityPlaceholderPage() {
 
     void load();
     return () => controller.abort();
-  }, [module]);
+  }, [module, refreshNonce]);
 
   if (!module) {
     return <Navigate to="/authority/accounts" replace />;
@@ -483,14 +506,26 @@ export function AuthorityPlaceholderPage() {
           </div>
         </Panel>
 
+        {isMutationSurface(module.id) ? (
+          <AuthorityMutationPanel
+            moduleId={module.id}
+            readState={readState}
+            snapshotContextId={activePrincipal?.contextId ?? ""}
+            mutationState={mutationState}
+            onState={setMutationState}
+            onAccepted={() => setRefreshNonce((value) => value + 1)}
+          />
+        ) : null}
+
         <Panel
           eyebrow="Non-Goals"
           title="Read-First Boundary"
-          description="This page is intentionally a stable home before it becomes a live read view."
+          description="Mutation controls are limited to the Phase 4 backend commands that already exist."
         >
           <div className="empty-state">
-            No mutation controls belong here yet. Phase 3 only makes authority state visible; later
-            phases add controlled commands, key lifecycle, audit, and browser transport.
+            Badge grant/revoke, key lifecycle, audit, and browser transport controls are still out
+            of scope here. Phase 4 only creates accounts, identities, durable principals, and
+            contexts through Sentry-controlled mutations.
           </div>
         </Panel>
       </section>
@@ -532,6 +567,292 @@ function AuthorityReadNotice({
       <div className="state-notice__body">{body}</div>
     </div>
   );
+}
+
+function AuthorityMutationPanel({
+  moduleId,
+  readState,
+  snapshotContextId,
+  mutationState,
+  onState,
+  onAccepted,
+}: {
+  moduleId: string;
+  readState: LiveReadState;
+  snapshotContextId: string;
+  mutationState: MutationState;
+  onState: (state: MutationState) => void;
+  onAccepted: () => void;
+}) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    onState({ status: "submitting", detail: "Submitting controlled authority mutation through Sentry." });
+    try {
+      const result = await submitAuthorityMutation(moduleId, form);
+      onState({
+        status: "accepted",
+        detail: `${result.resource_type ?? "resource"} ${result.resource_id ?? ""} accepted by Sentry.`,
+        result,
+      });
+      onAccepted();
+      event.currentTarget.reset();
+    } catch (error) {
+      if (error instanceof AuthorityMutationError) {
+        onState({
+          status: error.result?.status === "denied" ? "denied" : error.result?.status === "invalid" ? "invalid" : "error",
+          detail: error.message,
+          result: error.result,
+        });
+        return;
+      }
+      onState({
+        status: "error",
+        detail: error instanceof Error ? error.message : "Unknown mutation failure.",
+      });
+    }
+  }
+
+  return (
+    <Panel
+      eyebrow="Controlled Mutation"
+      title={mutationTitle(moduleId)}
+      description="These controls call Sentry authority mutations with same-origin credentials. They do not bypass Aegis, Sentry, or db-service."
+      actions={<StatusPill tone={mutationTone(mutationState.status)} label={mutationState.status} />}
+    >
+      <form className="authority-form" onSubmit={submit}>
+        {moduleId === "accounts" ? (
+          <AccountMutationFields defaultDomainId={snapshotContextId} />
+        ) : moduleId === "identities" ? (
+          <IdentityMutationFields accounts={readState.accounts} contexts={readState.contexts} defaultContextId={snapshotContextId} />
+        ) : moduleId === "principals" ? (
+          <PrincipalMutationFields principals={readState.principals} defaultContextId={snapshotContextId} />
+        ) : (
+          <ContextMutationFields contexts={readState.contexts} />
+        )}
+        <div className="button-row">
+          <button className="button" type="submit" disabled={mutationState.status === "submitting"}>
+            Submit Controlled Mutation
+          </button>
+        </div>
+      </form>
+      <div className={`state-notice ${mutationState.status === "accepted" ? "state-notice--success" : mutationState.status === "idle" ? "" : mutationState.status === "submitting" ? "state-notice--loading" : "state-notice--error"}`}>
+        <div className="state-notice__title">Mutation Result</div>
+        <div className="state-notice__body">
+          {mutationState.detail}
+          {mutationState.result?.error_code ? ` (${mutationState.result.error_code})` : ""}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function AccountMutationFields({ defaultDomainId }: { defaultDomainId: string }) {
+  return (
+    <div className="authority-form__grid">
+      <label>
+        Domain ID
+        <input name="domain_id" defaultValue={defaultDomainId} required />
+      </label>
+      <label>
+        Email
+        <input name="email" type="email" required />
+      </label>
+      <label>
+        Account ID (optional)
+        <input name="account_id" />
+      </label>
+      <label>
+        Provider ID (optional)
+        <input name="provider_id" />
+      </label>
+    </div>
+  );
+}
+
+function IdentityMutationFields({
+  accounts,
+  contexts,
+  defaultContextId,
+}: {
+  accounts: AccountReadModel[];
+  contexts: ContextReadModel[];
+  defaultContextId: string;
+}) {
+  return (
+    <div className="authority-form__grid">
+      <label>
+        Account
+        <select name="account_id" required defaultValue="">
+          <option value="" disabled>Select account</option>
+          {accounts.map((account) => (
+            <option value={account.id} key={account.id}>{account.email || account.id}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Context
+        <select name="context_id" required defaultValue={defaultContextId}>
+          {contexts.map((context) => (
+            <option value={context.id} key={context.id}>{context.name || context.id}</option>
+          ))}
+          {!contexts.length ? <option value={defaultContextId}>{defaultContextId || "No context loaded"}</option> : null}
+        </select>
+      </label>
+      <label>
+        Identity ID (optional)
+        <input name="identity_id" />
+      </label>
+      <label>
+        Principal ID (optional)
+        <input name="principal_id" />
+      </label>
+    </div>
+  );
+}
+
+function PrincipalMutationFields({
+  principals,
+  defaultContextId,
+}: {
+  principals: PrincipalReadModel[];
+  defaultContextId: string;
+}) {
+  return (
+    <div className="authority-form__grid">
+      <label>
+        Principal Type
+        <select name="principal_type" required defaultValue="service">
+          <option value="service">service</option>
+          <option value="app">app</option>
+          <option value="node">node</option>
+          <option value="durable_agent">durable_agent</option>
+          <option value="agent">agent</option>
+          <option value="managed">managed</option>
+        </select>
+      </label>
+      <label>
+        Parent Principal
+        <select name="parent_principal_id" defaultValue="">
+          <option value="">Use active actor principal</option>
+          {principals.map((principal) => (
+            <option value={principal.id} key={principal.id}>{principal.principal_type}:{principal.id}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Context ID
+        <input name="context_id" defaultValue={defaultContextId} />
+      </label>
+      <label>
+        Principal ID (optional)
+        <input name="principal_id" />
+      </label>
+    </div>
+  );
+}
+
+function ContextMutationFields({ contexts }: { contexts: ContextReadModel[] }) {
+  return (
+    <div className="authority-form__grid">
+      <label>
+        Mode
+        <select name="context_command" required defaultValue="context.create">
+          <option value="context.create">create</option>
+          <option value="context.update">update</option>
+        </select>
+      </label>
+      <label>
+        Name
+        <input name="name" required />
+      </label>
+      <label>
+        Context ID (required for update, optional for create)
+        <input name="context_id" />
+      </label>
+      <label>
+        Parent Context
+        <select name="parent_id" defaultValue="">
+          <option value="">No parent</option>
+          {contexts.map((context) => (
+            <option value={context.id} key={context.id}>{context.name || context.id}</option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}
+
+async function submitAuthorityMutation(moduleId: string, form: FormData) {
+  if (moduleId === "accounts") {
+    return createAccount({
+      domain_id: textValue(form, "domain_id"),
+      email: textValue(form, "email"),
+      account_id: optionalTextValue(form, "account_id"),
+      provider_id: optionalTextValue(form, "provider_id"),
+    });
+  }
+  if (moduleId === "identities") {
+    return createIdentity({
+      account_id: textValue(form, "account_id"),
+      context_id: textValue(form, "context_id"),
+      identity_id: optionalTextValue(form, "identity_id"),
+      principal_id: optionalTextValue(form, "principal_id"),
+    });
+  }
+  if (moduleId === "principals") {
+    return createDurablePrincipal({
+      principal_type: textValue(form, "principal_type") as "node" | "app" | "service" | "durable_agent" | "agent" | "managed",
+      parent_principal_id: optionalTextValue(form, "parent_principal_id"),
+      context_id: optionalTextValue(form, "context_id"),
+      principal_id: optionalTextValue(form, "principal_id"),
+    });
+  }
+  const payload = {
+    name: textValue(form, "name"),
+    context_id: optionalTextValue(form, "context_id"),
+    parent_id: optionalTextValue(form, "parent_id"),
+  };
+  return textValue(form, "context_command") === "context.update"
+    ? updateContext(payload)
+    : createContext(payload);
+}
+
+function textValue(form: FormData, name: string) {
+  const value = form.get(name);
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function optionalTextValue(form: FormData, name: string) {
+  const value = textValue(form, name);
+  return value || undefined;
+}
+
+function mutationTitle(moduleId: string) {
+  switch (moduleId) {
+    case "accounts":
+      return "Create Account / Enrollment";
+    case "identities":
+      return "Create Identity In Context";
+    case "principals":
+      return "Create Durable Principal";
+    case "contexts":
+      return "Create Or Update Context";
+    default:
+      return "Controlled Mutation";
+  }
+}
+
+function mutationTone(status: MutationState["status"]) {
+  switch (status) {
+    case "accepted":
+      return "success" as const;
+    case "submitting":
+    case "idle":
+      return "warning" as const;
+    default:
+      return "danger" as const;
+  }
 }
 
 function PrincipalList({ principals }: { principals: PrincipalReadModel[] }) {
