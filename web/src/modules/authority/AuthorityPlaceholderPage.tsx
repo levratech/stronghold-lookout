@@ -16,6 +16,7 @@ import {
   createIdentity,
   grantPrincipalBadge,
   readAccounts,
+  readAuthorityAuditEvents,
   readBadgeDefinitions,
   readBadgeGrants,
   readContexts,
@@ -31,6 +32,7 @@ import {
 } from "../../lib/authority/authority-client";
 import type {
   AccountReadModel,
+  AuthorityAuditEventReadModel,
   AuthorityMutationResult,
   AuthorityLoadStatus,
   BadgeDefinitionReadModel,
@@ -111,9 +113,9 @@ const surfaceNotes: Record<string, string[]> = {
     "Never expose reusable NATS credentials to browser JavaScript.",
   ],
   audit: [
-    "Reserve a stable cockpit home for authority audit evidence.",
-    "Show empty/planned states until audit storage exists.",
-    "Use this surface later for denied attempts, mutations, key lifecycle, and session events.",
+    "Show authority audit events as evidence, not as canonical authority state.",
+    "Start with key lifecycle audit readback while broader mutation auditing lands deliberately.",
+    "Use this surface for operator confidence after register, revoke, and rotate flows.",
   ],
 };
 
@@ -132,6 +134,7 @@ type LiveReadState =
       principals: PrincipalReadModel[];
       grants: PrincipalBadgeGrantReadModel[];
       keys: PrincipalKeyReadModel[];
+      auditEvents: AuthorityAuditEventReadModel[];
     }
   | {
       status: AuthorityLoadStatus;
@@ -143,6 +146,7 @@ type LiveReadState =
       principals: PrincipalReadModel[];
       grants: PrincipalBadgeGrantReadModel[];
       keys: PrincipalKeyReadModel[];
+      auditEvents: AuthorityAuditEventReadModel[];
     };
 
 function statusTone(status: AuthorityLoadStatus) {
@@ -206,13 +210,15 @@ function liveSurfaceLabel(moduleId: string) {
       return "Badge Grants";
     case "keys":
       return "Key Posture";
+    case "audit":
+      return "Authority Audit";
     default:
       return "";
   }
 }
 
 function isLiveReadSurface(moduleId: string) {
-  return ["accounts", "identities", "contexts", "badges", "principals", "grants", "keys"].includes(moduleId);
+  return ["accounts", "identities", "contexts", "badges", "principals", "grants", "keys", "audit"].includes(moduleId);
 }
 
 function isMutationSurface(moduleId: string) {
@@ -245,6 +251,7 @@ export function AuthorityPlaceholderPage() {
     principals: [],
     grants: [],
     keys: [],
+    auditEvents: [],
   });
 
   useEffect(() => {
@@ -259,6 +266,7 @@ export function AuthorityPlaceholderPage() {
         principals: [],
         grants: [],
         keys: [],
+        auditEvents: [],
       });
       return;
     }
@@ -274,6 +282,7 @@ export function AuthorityPlaceholderPage() {
       principals: [],
       grants: [],
       keys: [],
+      auditEvents: [],
     });
 
     async function load() {
@@ -292,6 +301,7 @@ export function AuthorityPlaceholderPage() {
             principals: [],
             grants: [],
             keys: [],
+            auditEvents: [],
           });
           return;
         }
@@ -310,6 +320,7 @@ export function AuthorityPlaceholderPage() {
             principals: [],
             grants: [],
             keys: [],
+            auditEvents: [],
           });
           return;
         }
@@ -328,6 +339,7 @@ export function AuthorityPlaceholderPage() {
             principals: [],
             grants: [],
             keys: [],
+            auditEvents: [],
           });
           return;
         }
@@ -346,6 +358,7 @@ export function AuthorityPlaceholderPage() {
             principals: [],
             grants: [],
             keys: [],
+            auditEvents: [],
           });
           return;
         }
@@ -364,6 +377,7 @@ export function AuthorityPlaceholderPage() {
             principals: response.items,
             grants: [],
             keys: [],
+            auditEvents: [],
           });
           return;
         }
@@ -386,6 +400,26 @@ export function AuthorityPlaceholderPage() {
             principals: principals.items,
             grants: response.items,
             keys: [],
+            auditEvents: [],
+          });
+          return;
+        }
+
+        if (module?.id === "audit") {
+          const response = await readAuthorityAuditEvents(controller.signal, { limit: 100 });
+          setReadState({
+            status: response.items.length ? "ready" : "empty",
+            detail: response.items.length
+              ? "Authority audit events loaded through Sentry authority reads."
+              : "No authority audit events were returned for this session scope.",
+            accounts: [],
+            contexts: [],
+            identities: [],
+            badges: [],
+            principals: [],
+            grants: [],
+            keys: [],
+            auditEvents: response.items,
           });
           return;
         }
@@ -406,6 +440,7 @@ export function AuthorityPlaceholderPage() {
           principals: principals.items,
           grants: [],
           keys: response.items,
+          auditEvents: [],
         });
       } catch (error) {
         if (controller.signal.aborted) {
@@ -424,6 +459,7 @@ export function AuthorityPlaceholderPage() {
           principals: [],
           grants: [],
           keys: [],
+          auditEvents: [],
         });
       }
     }
@@ -472,6 +508,8 @@ export function AuthorityPlaceholderPage() {
               <PrincipalList principals={readState.principals} />
             ) : module.id === "grants" ? (
               <GrantList grants={readState.grants} />
+            ) : module.id === "audit" ? (
+              <AuditList events={readState.auditEvents} />
             ) : (
               <KeyList keys={readState.keys} />
             )}
@@ -552,13 +590,13 @@ export function AuthorityPlaceholderPage() {
 
         <Panel
           eyebrow="Non-Goals"
-          title="Read-First Boundary"
-          description="Mutation controls are limited to the Phase 4 backend commands that already exist."
+          title="Authority Boundary"
+          description="Controls stay limited to the Sentry-backed read and mutation surfaces that already exist."
         >
           <div className="empty-state">
-            Badge grant/revoke, key lifecycle, audit, and browser transport controls are still out
-            of scope here. Phase 4 only creates accounts, identities, durable principals, and
-            contexts through Sentry-controlled mutations.
+            Lookout can inspect audit evidence and submit controlled account, identity, context,
+            badge, grant, and key mutations. Browser transport activation, key recovery, and broader
+            mutation auditing still need their own work orders.
           </div>
         </Panel>
       </section>
@@ -1181,6 +1219,42 @@ function KeyList({ keys }: { keys: PrincipalKeyReadModel[] }) {
             </div>
           </div>
           <StatusPill tone={key.revoked_at || key.status !== "active" ? "warning" : "success"} label={key.status || "unknown"} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AuditList({ events }: { events: AuthorityAuditEventReadModel[] }) {
+  if (!events.length) {
+    return <div className="empty-state">No authority audit events are visible yet.</div>;
+  }
+
+  return (
+    <div className="list">
+      {events.map((event) => (
+        <div className="list-item" key={event.id}>
+          <div>
+            <div className="list-item__title">{event.event_type}</div>
+            <div className="list-item__body">
+              resource:{event.resource_type}/{event.resource_id} · status:{event.status}
+            </div>
+            <div className="list-item__body">
+              actor:{event.actor_principal_id ?? "unknown"} · target:
+              {event.target_principal_id ?? "not recorded"} · context:{event.context_id ?? "not recorded"}
+            </div>
+            <div className="list-item__body">
+              reason:{event.reason ?? "not recorded"} · correlation:
+              {event.correlation_id ?? "not recorded"} · created:{event.created_at ?? "unknown"}
+            </div>
+            {event.error_code ? (
+              <div className="list-item__body">error:{event.error_code}</div>
+            ) : null}
+          </div>
+          <StatusPill
+            tone={event.status === "accepted" ? "success" : event.status === "invalid" ? "warning" : "danger"}
+            label={event.status || "unknown"}
+          />
         </div>
       ))}
     </div>

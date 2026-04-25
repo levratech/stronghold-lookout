@@ -72,6 +72,21 @@ export interface PrincipalKeyReadModel {
   revoked_at?: string;
 }
 
+export interface AuthorityAuditEventReadModel {
+  id: string;
+  event_type: string;
+  resource_type: string;
+  resource_id: string;
+  actor_principal_id?: string;
+  target_principal_id?: string;
+  context_id?: string;
+  status: string;
+  error_code?: string;
+  reason?: string;
+  correlation_id?: string;
+  created_at?: string;
+}
+
 export interface AuthorityOverviewReadModel {
   accounts?: AccountReadModel[];
   contexts?: ContextReadModel[];
@@ -80,6 +95,7 @@ export interface AuthorityOverviewReadModel {
   badge_definitions?: BadgeDefinitionReadModel[];
   badge_grants?: PrincipalBadgeGrantReadModel[];
   principal_keys?: PrincipalKeyReadModel[];
+  audit_events?: AuthorityAuditEventReadModel[];
   page: PageInfo;
 }
 
@@ -101,7 +117,8 @@ export type AuthorityReadSurface =
   | "principals"
   | "badges"
   | "grants"
-  | "keys";
+  | "keys"
+  | "audit";
 
 export type AuthorityLoadStatus = "idle" | "loading" | "ready" | "denied" | "empty" | "error";
 

@@ -1,6 +1,7 @@
 import { lookoutEnvironment } from "../../env";
 import type {
   AccountReadModel,
+  AuthorityAuditEventReadModel,
   AuthorityOverviewReadModel,
   AuthorityReadFilter,
   AuthorityReadSurface,
@@ -36,6 +37,7 @@ interface RawAuthorityListResponse<T> {
   badge_definitions?: T[];
   badge_grants?: T[];
   principal_keys?: T[];
+  audit_events?: T[];
 }
 
 export class AuthorityReadError extends Error {
@@ -199,6 +201,15 @@ export async function readPrincipalKeys(signal?: AbortSignal, filter?: Authority
     filter,
   );
   return normalizeList(payload, "principal_keys") as AuthorityListResponse<PrincipalKeyReadModel>;
+}
+
+export async function readAuthorityAuditEvents(signal?: AbortSignal, filter?: AuthorityReadFilter) {
+  const payload = await readJSON<RawAuthorityListResponse<AuthorityAuditEventReadModel>>(
+    "audit",
+    signal,
+    filter,
+  );
+  return normalizeList(payload, "audit_events") as AuthorityListResponse<AuthorityAuditEventReadModel>;
 }
 
 export function createAccount(payload: CreateAccountPayload) {
