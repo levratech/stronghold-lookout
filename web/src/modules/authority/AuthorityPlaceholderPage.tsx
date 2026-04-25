@@ -2,10 +2,18 @@ import { useEffect, useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { Panel } from "../../components/ui/Panel";
 import { StatusPill } from "../../components/ui/StatusPill";
-import { AuthorityReadError, readAccounts, readIdentities } from "../../lib/authority/authority-client";
+import {
+  AuthorityReadError,
+  readAccounts,
+  readBadgeDefinitions,
+  readContexts,
+  readIdentities,
+} from "../../lib/authority/authority-client";
 import type {
   AccountReadModel,
   AuthorityLoadStatus,
+  BadgeDefinitionReadModel,
+  ContextReadModel,
   IdentityReadModel,
 } from "../../lib/authority/authority-types";
 import { lookoutModules, type LookoutModuleDefinition } from "../../shell/module-registry";
@@ -72,8 +80,22 @@ function findModule(slug: string | undefined): LookoutModuleDefinition | undefin
 }
 
 type LiveReadState =
-  | { status: "idle"; detail: string; accounts: AccountReadModel[]; identities: IdentityReadModel[] }
-  | { status: AuthorityLoadStatus; detail: string; accounts: AccountReadModel[]; identities: IdentityReadModel[] };
+  | {
+      status: "idle";
+      detail: string;
+      accounts: AccountReadModel[];
+      contexts: ContextReadModel[];
+      identities: IdentityReadModel[];
+      badges: BadgeDefinitionReadModel[];
+    }
+  | {
+      status: AuthorityLoadStatus;
+      detail: string;
+      accounts: AccountReadModel[];
+      contexts: ContextReadModel[];
+      identities: IdentityReadModel[];
+      badges: BadgeDefinitionReadModel[];
+    };
 
 function statusTone(status: AuthorityLoadStatus) {
   switch (status) {
@@ -96,9 +118,17 @@ function liveSurfaceLabel(moduleId: string) {
       return "Account Inventory";
     case "identities":
       return "Identity Lineage";
+    case "contexts":
+      return "Context Tree";
+    case "badges":
+      return "Badge Catalog";
     default:
       return "";
   }
+}
+
+function isLiveReadSurface(moduleId: string) {
+  return ["accounts", "identities", "contexts", "badges"].includes(moduleId);
 }
 
 export function AuthorityPlaceholderPage() {
@@ -108,16 +138,20 @@ export function AuthorityPlaceholderPage() {
     status: "idle",
     detail: "This authority surface has not requested data yet.",
     accounts: [],
+    contexts: [],
     identities: [],
+    badges: [],
   });
 
   useEffect(() => {
-    if (!module || (module.id !== "accounts" && module.id !== "identities")) {
+    if (!module || !isLiveReadSurface(module.id)) {
       setReadState({
         status: "idle",
         detail: "This surface remains a read-first placeholder until its work order lands.",
         accounts: [],
+        contexts: [],
         identities: [],
+        badges: [],
       });
       return;
     }
@@ -127,7 +161,9 @@ export function AuthorityPlaceholderPage() {
       status: "loading",
       detail: `Loading ${module.name.toLowerCase()} through the Sentry authority read adapter.`,
       accounts: [],
+      contexts: [],
       identities: [],
+      badges: [],
     });
 
     async function load() {
@@ -137,22 +173,56 @@ export function AuthorityPlaceholderPage() {
           setReadState({
             status: response.items.length ? "ready" : "empty",
             detail: response.items.length
-              ? "Accounts loaded through Sentry authority reads."
-              : "No accounts were returned for this session scope.",
+            ? "Accounts loaded through Sentry authority reads."
+            : "No accounts were returned for this session scope.",
             accounts: response.items,
+            contexts: [],
             identities: [],
+            badges: [],
           });
           return;
         }
 
-        const response = await readIdentities(controller.signal, { limit: 100 });
+        if (module?.id === "identities") {
+          const response = await readIdentities(controller.signal, { limit: 100 });
+          setReadState({
+            status: response.items.length ? "ready" : "empty",
+            detail: response.items.length
+              ? "Identities and paired principals loaded through Sentry authority reads."
+              : "No identities were returned for this session scope.",
+            accounts: [],
+            contexts: [],
+            identities: response.items,
+            badges: [],
+          });
+          return;
+        }
+
+        if (module?.id === "contexts") {
+          const response = await readContexts(controller.signal, { limit: 100 });
+          setReadState({
+            status: response.items.length ? "ready" : "empty",
+            detail: response.items.length
+              ? "Contexts loaded through Sentry authority reads."
+              : "No contexts were returned for this session scope.",
+            accounts: [],
+            contexts: response.items,
+            identities: [],
+            badges: [],
+          });
+          return;
+        }
+
+        const response = await readBadgeDefinitions(controller.signal, { limit: 100 });
         setReadState({
           status: response.items.length ? "ready" : "empty",
           detail: response.items.length
-            ? "Identities and paired principals loaded through Sentry authority reads."
-            : "No identities were returned for this session scope.",
+            ? "Badge definitions loaded through Sentry authority reads."
+            : "No badge definitions were returned for this session scope.",
           accounts: [],
-          identities: response.items,
+          contexts: [],
+          identities: [],
+          badges: response.items,
         });
       } catch (error) {
         if (controller.signal.aborted) {
@@ -165,7 +235,9 @@ export function AuthorityPlaceholderPage() {
               ? error.message
               : "Unknown authority read failure.",
           accounts: [],
+          contexts: [],
           identities: [],
+          badges: [],
         });
       }
     }
@@ -179,7 +251,7 @@ export function AuthorityPlaceholderPage() {
   }
 
   const notes = surfaceNotes[module.id] ?? [];
-  const isLiveSurface = module.id === "accounts" || module.id === "identities";
+  const isLiveSurface = isLiveReadSurface(module.id);
 
   return (
     <div className="page">
@@ -201,8 +273,12 @@ export function AuthorityPlaceholderPage() {
           >
             {module.id === "accounts" ? (
               <AccountList accounts={readState.accounts} />
-            ) : (
+            ) : module.id === "identities" ? (
               <IdentityList identities={readState.identities} />
+            ) : module.id === "contexts" ? (
+              <ContextList contexts={readState.contexts} />
+            ) : (
+              <BadgeList badges={readState.badges} />
             )}
           </Panel>
         ) : null}
@@ -236,6 +312,51 @@ export function AuthorityPlaceholderPage() {
           </div>
         </Panel>
       </section>
+    </div>
+  );
+}
+
+function ContextList({ contexts }: { contexts: ContextReadModel[] }) {
+  if (!contexts.length) {
+    return <div className="empty-state">No context records are visible yet.</div>;
+  }
+
+  return (
+    <div className="list">
+      {contexts.map((context) => (
+        <div className="list-item" key={context.id}>
+          <div>
+            <div className="list-item__title">{context.name || context.id}</div>
+            <div className="list-item__body">
+              context:{context.id} · parent:{context.parent_id ?? "root"}
+            </div>
+          </div>
+          <StatusPill tone={context.parent_id ? "neutral" : "success"} label={context.parent_id ? "child" : "root"} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BadgeList({ badges }: { badges: BadgeDefinitionReadModel[] }) {
+  if (!badges.length) {
+    return <div className="empty-state">No badge definitions are visible yet.</div>;
+  }
+
+  return (
+    <div className="list">
+      {badges.map((badge) => (
+        <div className="list-item" key={badge.id}>
+          <div>
+            <div className="list-item__title">{badge.name || badge.id}</div>
+            <div className="list-item__body">
+              badge:{badge.id} · context:{badge.context_id}
+            </div>
+            <div className="list-item__body">{badge.description ?? "No description"}</div>
+          </div>
+          <StatusPill tone="neutral" label="definition" />
+        </div>
+      ))}
     </div>
   );
 }
