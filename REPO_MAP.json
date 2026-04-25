@@ -39,6 +39,7 @@
     "The browser shell must not receive reusable transport credentials from session bootstrap payloads.",
     "The browser shell may request a short-lived scoped grant from the Sentry route advertised by session bootstrap, but must not store it in localStorage/sessionStorage.",
     "Browser NATS state must distinguish session/auth failure, credential minting failure, and WebSocket rail failure.",
+    "Verified command envelope enforcement for browser mutations must wait for an explicit active-principal signing key lifecycle; NATS credentials must not be treated as command signatures.",
     "Static module registration is intentional and keeps the cockpit structure stable without runtime plugin machinery.",
     "Lookout displays principal, badge, key, audit, and transport posture and can submit controlled Sentry mutations; it does not own principal key registration, envelope verification, badge truth, audit truth, or authority issuance.",
     "Read-first Sentry/Aegis pages should stay honest about backend gaps rather than implying mature browser-admin APIs exist."

@@ -27,5 +27,6 @@
 
 1. Prove the Sentry-minted delegated-principal NATS credential model end to end against the live `/_/nats` rail; do not reuse the static bootstrap NATS token for browser, CLI, desktop, service, node, or agent actors.
 2. Flip session bootstrap `transport.ready=true` only after the browser can connect over `/_/nats` with a principal-scoped credential and negative subject-policy tests pass.
-3. Add explicit Aegis read adapters for interface listing, route inspection, access requirements, and live config provenance/status.
-4. Expand verified command envelope coverage before sensitive browser-originated commands move onto the transport rail.
+3. Add a browser/principal command-signing key lifecycle before requiring verified envelopes for sensitive cockpit mutations.
+4. Add explicit Aegis read adapters for interface listing, route inspection, access requirements, and live config provenance/status.
+5. Expand verified command envelope coverage before sensitive browser-originated commands move onto the transport rail.
