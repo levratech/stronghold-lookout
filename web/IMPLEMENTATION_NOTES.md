@@ -11,6 +11,9 @@
 - Foundation truth panels for transport grant source, credential expiry,
   permission-envelope counts, last observed denied rail action, authority read
   rail, command-signer custody, and memory-only replay posture.
+- A browser-side NATS permission probe that uses the live WebSocket rail to
+  verify allowed principal inbox/outbox subjects and denied out-of-scope
+  subjects without treating expected denials as transport failure.
 
 ## What Is Real Now
 
@@ -23,6 +26,9 @@
 - The NATS provider keeps the Sentry transport grant token in memory only and
   exposes grant posture metadata for the cockpit without treating transport
   admission as command authorship.
+- The Overview transport panel can run an in-tab allow/deny permission probe
+  against the active browser NATS connection and keeps expected permission
+  denials visible as denied actions rather than broken transport.
 - The shell, layout, module boundaries, authority reads, controlled mutations, and shared providers are production-shaped.
 - The Authority Keys surface can create a browser-local non-exportable WebCrypto
   Ed25519 command-signing key for the active principal, store it in IndexedDB,
