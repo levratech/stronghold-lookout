@@ -1,7 +1,7 @@
 {
   "name": "stronghold-lookout",
   "purpose": "Operator tooling repo for Stronghold, now spanning both the Go CLI runtime and a React/TypeScript web cockpit for same-origin auth, NATS transport, and estate visibility.",
-  "status": "active CLI plus web cockpit repo with principal-aware session state, production-shaped browser shell, read-first authority/edge surfaces, controlled authority mutations with first-slice Level 3 command-auth signing, browser-local Ed25519 command-signing key lifecycle, key lifecycle audit readback, and grant-backed NATS WebSocket connection flow",
+  "status": "active CLI plus web cockpit repo with principal-aware session state, production-shaped browser shell, read-first authority/edge surfaces, controlled authority mutations with first-slice Level 3 command-auth signing, browser-local Ed25519 command-signing key lifecycle, key lifecycle audit readback, grant-backed NATS WebSocket connection flow, and Foundation Verification Gate truth panels",
   "repo_role_in_system": "Operator control surface and config tooling for the Stronghold estate",
   "related_repos": [
     "stronghold",
@@ -28,8 +28,9 @@
     "session_client": "Same-origin browser session boundary that opens Drawbridge auth, listens for callback completion, refreshes /_/auth/session, calls same-origin logout, normalizes separate root and active principal metadata, and discovers the Sentry browser transport grant path without storing credentials.",
     "authority_read_client": "Typed authority read client that falls back to same-origin HTTP under /_/authority/read, but prefers browser NATS request/reply with the short-lived Sentry grant token once the /_/nats rail is connected. It includes badge archive state, grant provenance, key posture, and authority audit-event readback.",
     "authority_mutation_client": "Typed same-origin HTTP client for controlled Sentry authority mutations under /_/authority/mutate with idempotency keys and operator confirmation states, including badge-definition, principal-badge grant, and principal-key lifecycle controls. Badge grant/revoke and principal key revoke/rotate attach Level 3 command-auth signatures when a browser signer is ready.",
-    "nats_browser_transport": "NATS over WebSocket browser rail used by the cockpit through /_/nats only when session bootstrap reports transport.ready=true and Sentry confirms transport_ready=true while returning a delegated-principal native NATS credential through the same-origin grant path. The grant token is kept in memory for authorized NATS authority reads and the static bootstrap token is never used as a browser credential.",
+    "nats_browser_transport": "NATS over WebSocket browser rail used by the cockpit through /_/nats only when session bootstrap reports transport.ready=true and Sentry confirms transport_ready=true while returning a delegated-principal native NATS credential through the same-origin grant path. The grant token is kept in memory for authorized NATS authority reads; grant posture metadata exposes source, expiry, permission counts, and denial state without persisting secrets, and the static bootstrap token is never used as a browser credential.",
     "browser_command_signing": "Level 3 Lookout Web signer lifecycle for active-principal command authorship. Generates non-exportable native WebCrypto Ed25519 keys, stores the private CryptoKey in IndexedDB, registers only rawurl-base64 public key material with Sentry, selects matching active principal key records, and can locally sign smoke command payloads before backend envelope enforcement is enabled.",
+    "lookout_truth_panels": "Overview and authority surfaces expose runtime truth indicators for transport grant source, credential expiry, permission-envelope shape, last observed denied rail/read/mutation action, active authority read rail, command-signer custody boundaries, and memory-only replay posture.",
     "config_templates": "Tracked JSON files remain examples/templates rather than live estate truth."
   },
   "critical_invariants": [
@@ -46,13 +47,14 @@
     "Lookout Web command signing stores non-exportable private CryptoKey material only in IndexedDB and registers only public Ed25519 key material with Sentry.",
     "Lookout must attach command-auth signatures for badge grant/revoke and principal key revoke/rotate mutations; principal_key.register remains the browser signer bootstrap exception.",
     "Static module registration is intentional and keeps the cockpit structure stable without runtime plugin machinery.",
-    "Lookout displays principal, badge, key, audit, and transport posture and can submit controlled Sentry mutations; it does not own principal key registration, envelope verification, badge truth, audit truth, or authority issuance.",
+    "Lookout displays principal, badge, key, audit, transport, grant, signer, read-rail, and replay posture and can submit controlled Sentry mutations; it does not own principal key registration, envelope verification, badge truth, audit truth, replay truth, or authority issuance.",
     "Read-first Sentry/Aegis pages should stay honest about backend gaps rather than implying mature browser-admin APIs exist."
   ],
   "known_risks": [
     "Authority cockpit reads prefer the browser NATS rail when connected and fall back to Sentry same-origin HTTP adapters; if the live edge config or transport grant path is stale, authorized sessions can still be denied.",
     "The browser transport depends on the /_/nats rail accepting Sentry-minted delegated-principal NATS credentials; Lookout must not connect unless both session bootstrap and the Sentry grant response confirm readiness, and the static bootstrap NATS token must not be reused for browser, CLI, desktop, service, node, or agent actors.",
     "Audit reads currently surface key lifecycle mutation evidence; broader mutation/session auditing and transport commands remain intentionally deferred.",
+    "Lookout truth panels expose the current memory-only replay posture and observed in-tab denial state, but they do not replace backend evidence bundles or adversarial smoke commands.",
     "Template drift from generated runtime config is possible if bootstrap behavior changes and tracked examples are not refreshed.",
     "Repo documentation still needs cleanup where older prose says no session bootstrap exists or says clients are unimplemented; the map reflects the current code, not those stale lines.",
     "As Stronghold envelope enforcement becomes live, Lookout will need explicit UI/runtime posture for signed message authorship rather than only transport readiness."
@@ -127,6 +129,12 @@
     ],
     "browser_command_signing": [
       "web/src/lib/command-signing/command-signing.ts",
+      "web/src/modules/authority/AuthorityPlaceholderPage.tsx"
+    ],
+    "lookout_truth_panels": [
+      "web/src/lib/nats/NatsProvider.tsx",
+      "web/src/lib/nats/nats-types.ts",
+      "web/src/modules/overview/OverviewPage.tsx",
       "web/src/modules/authority/AuthorityPlaceholderPage.tsx"
     ],
     "authority_read_surfaces": [

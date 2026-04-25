@@ -10,19 +10,34 @@ import { connect, credsAuthenticator, type NatsConnection, type Status } from "n
 import { getNatsServerURL } from "../../env";
 import { useSession } from "../session/SessionProvider";
 import { requestBrowserTransportGrant } from "../session/session-client";
-import { describeNatsError, type NatsContextValue, type NatsConnectionState } from "./nats-types";
+import type { BrowserTransportGrantResponse } from "../session/session-types";
+import {
+  describeNatsError,
+  type NatsContextValue,
+  type NatsConnectionState,
+  type NatsGrantPermissions,
+  type NatsGrantPosture,
+} from "./nats-types";
 
 const NatsContext = createContext<NatsContextValue | null>(null);
 
 const defaultState: Pick<
   NatsContextValue,
-  "state" | "detail" | "reconnects" | "lastError" | "connectedServer"
+  | "state"
+  | "detail"
+  | "reconnects"
+  | "lastError"
+  | "lastDeniedAction"
+  | "connectedServer"
+  | "grantPosture"
 > = {
   state: "disconnected" as NatsConnectionState,
   detail: "NATS WebSocket transport is idle.",
   reconnects: 0,
   lastError: undefined,
+  lastDeniedAction: undefined,
   connectedServer: undefined,
+  grantPosture: undefined,
 };
 
 export function NatsProvider({ children }: PropsWithChildren) {
@@ -41,6 +56,10 @@ export function NatsProvider({ children }: PropsWithChildren) {
       state: "disconnected",
       detail: "NATS WebSocket transport is closed.",
       reconnects: 0,
+      lastError: undefined,
+      lastDeniedAction: undefined,
+      connectedServer: undefined,
+      grantPosture: undefined,
     });
   };
 
@@ -58,6 +77,9 @@ export function NatsProvider({ children }: PropsWithChildren) {
         state: "reconnecting",
         detail: "NATS transport dropped; waiting for the browser rail to recover.",
         lastError: status.data ? describeNatsError(status.data) : current.lastError,
+        lastDeniedAction: status.data
+          ? describeDeniedAction(status.data) ?? current.lastDeniedAction
+          : current.lastDeniedAction,
       }));
       return;
     }
@@ -80,6 +102,7 @@ export function NatsProvider({ children }: PropsWithChildren) {
         state: "error",
         detail: "NATS transport reported an application-level error.",
         lastError: describeNatsError(status.data),
+        lastDeniedAction: describeDeniedAction(status.data) ?? current.lastDeniedAction,
       }));
     }
   };
@@ -96,6 +119,8 @@ export function NatsProvider({ children }: PropsWithChildren) {
         reconnects: 0,
         connectedServer: undefined,
         lastError: undefined,
+        lastDeniedAction: undefined,
+        grantPosture: undefined,
       });
       return;
     }
@@ -107,6 +132,8 @@ export function NatsProvider({ children }: PropsWithChildren) {
         reconnects: 0,
         connectedServer: undefined,
         lastError: undefined,
+        lastDeniedAction: undefined,
+        grantPosture: undefined,
       });
       return;
     }
@@ -118,6 +145,8 @@ export function NatsProvider({ children }: PropsWithChildren) {
         reconnects: 0,
         connectedServer: undefined,
         lastError: undefined,
+        lastDeniedAction: undefined,
+        grantPosture: undefined,
       });
       return;
     }
@@ -131,14 +160,17 @@ export function NatsProvider({ children }: PropsWithChildren) {
 
     let credsFile: string | undefined;
     let grantToken: string | undefined;
+    let grantPosture: NatsGrantPosture | undefined;
     try {
       const grant = await requestBrowserTransportGrant(snapshot);
+      grantPosture = grantPostureFromResponse(grant);
       if (!grant.transport_ready) {
         setState((current) => ({
           ...current,
           state: "credential_error",
           detail: "Sentry issued a transport grant, but the runtime rail did not confirm readiness.",
           lastError: "transport_ready=false",
+          grantPosture,
         }));
         return;
       }
@@ -150,6 +182,7 @@ export function NatsProvider({ children }: PropsWithChildren) {
           state: "credential_error",
           detail: "Sentry issued a transport grant, but no native NATS credential was returned.",
           lastError: grant.nats_native ? undefined : "Grant response was not NATS-native.",
+          grantPosture,
         }));
         return;
       }
@@ -159,6 +192,7 @@ export function NatsProvider({ children }: PropsWithChildren) {
         state: "credential_error",
         detail: "Unable to obtain a scoped NATS credential through the current session.",
         lastError: describeNatsError(error),
+        lastDeniedAction: describeDeniedAction(error) ?? current.lastDeniedAction,
       }));
       return;
     }
@@ -169,6 +203,7 @@ export function NatsProvider({ children }: PropsWithChildren) {
         state: "connecting",
         detail: `Connecting to estate transport at ${serverURL}.`,
         lastError: undefined,
+        grantPosture,
       }));
 
       const connection = await connect({
@@ -187,6 +222,7 @@ export function NatsProvider({ children }: PropsWithChildren) {
         detail: "NATS WebSocket transport is live.",
         connectedServer: connection.getServer(),
         lastError: undefined,
+        grantPosture,
       }));
 
       statusIteratorRef.current = watchConnection(connection);
@@ -200,6 +236,7 @@ export function NatsProvider({ children }: PropsWithChildren) {
             state: "error",
             detail: "NATS transport closed with an error.",
             lastError: describeNatsError(error),
+            lastDeniedAction: describeDeniedAction(error) ?? current.lastDeniedAction,
           }));
           return;
         }
@@ -216,6 +253,8 @@ export function NatsProvider({ children }: PropsWithChildren) {
         detail:
           "Unable to establish the browser transport after obtaining a scoped credential.",
         lastError: describeNatsError(error),
+        lastDeniedAction: describeDeniedAction(error) ?? current.lastDeniedAction,
+        grantPosture,
       }));
     }
   };
@@ -229,6 +268,8 @@ export function NatsProvider({ children }: PropsWithChildren) {
         reconnects: 0,
         connectedServer: undefined,
         lastError: undefined,
+        lastDeniedAction: undefined,
+        grantPosture: undefined,
       });
       return;
     }
@@ -257,6 +298,7 @@ export function NatsProvider({ children }: PropsWithChildren) {
         serverURL,
         connection: connectionRef.current,
         grantToken: grantTokenRef.current,
+        grantPosture: state.grantPosture,
         connect: connectTransport,
         disconnect,
       }}
@@ -264,6 +306,71 @@ export function NatsProvider({ children }: PropsWithChildren) {
       {children}
     </NatsContext.Provider>
   );
+}
+
+function grantPostureFromResponse(grant: BrowserTransportGrantResponse): NatsGrantPosture {
+  const claims = grant.claims ?? {};
+  return {
+    source: "session-grant",
+    credentialFormat: grant.credential_format,
+    credentialId: stringClaim(claims, "jti"),
+    principalId: stringClaim(claims, "principal_id"),
+    activePrincipalId: stringClaim(claims, "active_principal_id"),
+    contextId: stringClaim(claims, "context_id"),
+    rail: stringClaim(claims, "rail"),
+    profile: stringClaim(claims, "profile"),
+    issuedAt: timeClaim(claims, "iat"),
+    expiresAt: timeClaim(claims, "exp"),
+    refreshable: booleanClaim(claims, "refreshable"),
+    nativeCredential: grant.nats_native && Boolean(grant.native_credential?.creds_file),
+    userPublicKey: grant.native_credential?.user_public_key,
+    permissions: permissionsClaim(claims.permissions),
+  };
+}
+
+function stringClaim(claims: Record<string, unknown>, key: string) {
+  const value = claims[key];
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function booleanClaim(claims: Record<string, unknown>, key: string) {
+  const value = claims[key];
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function timeClaim(claims: Record<string, unknown>, key: string) {
+  const value = claims[key];
+  if (typeof value === "string" && value) {
+    return value;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return new Date(value * 1000).toISOString();
+  }
+  return undefined;
+}
+
+function permissionsClaim(value: unknown): NatsGrantPermissions | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  return {
+    pubAllow: stringArrayClaim(record.pub_allow),
+    pubDeny: stringArrayClaim(record.pub_deny),
+    subAllow: stringArrayClaim(record.sub_allow),
+    subDeny: stringArrayClaim(record.sub_deny),
+  };
+}
+
+function stringArrayClaim(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function describeDeniedAction(error: unknown) {
+  const message = describeNatsError(error);
+  return /permission|permissions|authorization|not authorized|denied/i.test(message)
+    ? message
+    : undefined;
 }
 
 export function useNats() {

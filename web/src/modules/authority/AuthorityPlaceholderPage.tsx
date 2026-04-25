@@ -698,7 +698,7 @@ export function AuthorityPlaceholderPage() {
         <Panel
           eyebrow="Access State"
           title="Session and Transport Posture"
-          description="Authority reads use same-origin Sentry HTTP. Browser NATS readiness is tracked separately so transport gaps are not mistaken for auth denial."
+          description="Authority reads prefer browser NATS once the rail is connected, with same-origin Sentry HTTP kept visible as the compatibility fallback."
           actions={<StatusPill tone={sessionTone(snapshot.status)} label={snapshot.status} />}
         >
           <div className="kv-grid">
@@ -724,6 +724,30 @@ export function AuthorityPlaceholderPage() {
               <div className="kv__label">NATS State</div>
               <div className="kv__value">
                 <StatusPill tone={natsTone(nats.state)} label={nats.state} />
+              </div>
+            </div>
+            <div className="kv">
+              <div className="kv__label">Authority Read Rail</div>
+              <div className="kv__value">
+                {authorityReadTransport ? "browser NATS request/reply" : "Sentry HTTP fallback"}
+              </div>
+            </div>
+            <div className="kv">
+              <div className="kv__label">Grant Token</div>
+              <div className="kv__value">{nats.grantToken ? "in-memory only" : "not available"}</div>
+            </div>
+            <div className="kv">
+              <div className="kv__label">Grant Expires</div>
+              <div className="kv__value">{nats.grantPosture?.expiresAt ?? "No grant expiry observed"}</div>
+            </div>
+            <div className="kv">
+              <div className="kv__label">Last Denied Action</div>
+              <div className="kv__value">
+                {readState.status === "denied"
+                  ? readState.detail
+                  : mutationState.status === "denied"
+                    ? mutationState.detail
+                    : nats.lastDeniedAction ?? "None observed in this tab"}
               </div>
             </div>
           </div>

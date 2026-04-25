@@ -47,6 +47,9 @@ export function OverviewPage() {
   const account = snapshot.account;
   const identity = snapshot.identity;
   const context = snapshot.context;
+  const authorityReadRail =
+    nats.state === "connected" && nats.grantToken ? "browser NATS request/reply" : "Sentry HTTP fallback";
+  const grantPosture = nats.grantPosture;
 
   return (
     <div className="page">
@@ -202,6 +205,18 @@ export function OverviewPage() {
               <div className="kv__value">{snapshot.transport.grantReady ? "available" : "unavailable"}</div>
             </div>
             <div className="kv">
+              <div className="kv__label">Grant Source</div>
+              <div className="kv__value">
+                {grantPosture?.source === "session-grant"
+                  ? "Sentry same-origin session grant"
+                  : "No grant issued in this tab"}
+              </div>
+            </div>
+            <div className="kv">
+              <div className="kv__label">Credential Expires</div>
+              <div className="kv__value">{grantPosture?.expiresAt ?? "No credential expiry observed"}</div>
+            </div>
+            <div className="kv">
               <div className="kv__label">NATS Endpoint</div>
               <div className="kv__value">
                 <code>{snapshot.transport.path ?? nats.serverURL}</code>
@@ -224,6 +239,14 @@ export function OverviewPage() {
             <div className="kv">
               <div className="kv__label">Last Error</div>
               <div className="kv__value">{nats.lastError ?? "None reported"}</div>
+            </div>
+            <div className="kv">
+              <div className="kv__label">Last Denied Action</div>
+              <div className="kv__value">{nats.lastDeniedAction ?? "None observed in this tab"}</div>
+            </div>
+            <div className="kv">
+              <div className="kv__label">Permission Envelope</div>
+              <div className="kv__value">{formatPermissionSummary(grantPosture?.permissions)}</div>
             </div>
           </div>
           <div className="empty-state">{snapshot.transport.detail}</div>
@@ -253,27 +276,37 @@ export function OverviewPage() {
         </Panel>
 
         <Panel
-          eyebrow="Core Surfaces"
-          title="What Is Real Right Now"
-          description="The first cockpit favors structural correctness over pretending the backend is further along than it is."
+          eyebrow="Truth Indicators"
+          title="Runtime Claims Worth Believing"
+          description="These markers separate login, transport admission, read authority, and command authorship so the cockpit does not flatten them into one green light."
         >
           <div className="list">
             <div className="list-item">
               <div>
-                <div className="list-item__title">Real</div>
+                <div className="list-item__title">Authority Read Source</div>
                 <div className="list-item__body">
-                  Same-origin auth handoff under <code>/_/auth</code>, browser shell layout,
-                  module registry, and NATS WebSocket client boundary for <code>/_/nats</code>.
+                  Reads currently use {authorityReadRail}. HTTP fallback remains visible so it
+                  cannot silently bypass the stricter browser NATS rail.
                 </div>
               </div>
             </div>
             <div className="list-item">
               <div>
-                <div className="list-item__title">Missing Backend Surface</div>
+                <div className="list-item__title">Command Signer</div>
                 <div className="list-item__body">
-                  The session bootstrap now exposes root/active principal metadata and grant
-                  discovery; live browser transport still depends on Sentry returning native
-                  scoped credentials and the NATS WebSocket rail accepting them.
+                  Level 3 authorship is not inferred from the NATS rail. The Keys surface checks
+                  native WebCrypto Ed25519 support, local IndexedDB key custody, and Sentry key
+                  binding before sensitive mutations attach command-auth signatures.
+                </div>
+              </div>
+            </div>
+            <div className="list-item">
+              <div>
+                <div className="list-item__title">Replay Protection</div>
+                <div className="list-item__body">
+                  Backend command-envelope replay protection is active at the verifier seam but
+                  memory-only in this slice; durable cross-instance replay storage remains a known
+                  hardening follow-up.
                 </div>
               </div>
             </div>
@@ -282,4 +315,21 @@ export function OverviewPage() {
       </section>
     </div>
   );
+}
+
+function formatPermissionSummary(permissions: {
+  pubAllow: string[];
+  pubDeny: string[];
+  subAllow: string[];
+  subDeny: string[];
+} | undefined) {
+  if (!permissions) {
+    return "No NATS permission claim observed";
+  }
+  return [
+    `pub allow:${permissions.pubAllow.length}`,
+    `pub deny:${permissions.pubDeny.length}`,
+    `sub allow:${permissions.subAllow.length}`,
+    `sub deny:${permissions.subDeny.length}`,
+  ].join(" / ");
 }
