@@ -66,6 +66,7 @@ export interface PrincipalKeyReadModel {
   key_id: string;
   algorithm: string;
   status: string;
+  issuer_signature_present?: boolean;
   created_at?: string;
   expires_at?: string;
   revoked_at?: string;
@@ -114,7 +115,10 @@ export type AuthorityMutationCommand =
   | "badge_definition.update"
   | "badge_definition.archive"
   | "principal_badge.grant"
-  | "principal_badge.revoke";
+  | "principal_badge.revoke"
+  | "principal_key.register"
+  | "principal_key.revoke"
+  | "principal_key.rotate";
 
 export type AuthorityMutationStatus = "accepted" | "denied" | "invalid" | "error";
 
@@ -175,4 +179,12 @@ export interface PrincipalBadgeGrantMutationPayload {
   context_id: string;
   permission: string;
   reason?: string;
+}
+
+export interface PrincipalKeyMutationPayload {
+  principal_id: string;
+  key_id: string;
+  old_key_id?: string;
+  algorithm?: string;
+  public_key?: string;
 }

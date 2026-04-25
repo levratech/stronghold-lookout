@@ -22,7 +22,10 @@ import {
   readIdentities,
   readPrincipalKeys,
   readPrincipals,
+  registerPrincipalKey,
   revokePrincipalBadge,
+  revokePrincipalKey,
+  rotatePrincipalKey,
   updateBadgeDefinition,
   updateContext,
 } from "../../lib/authority/authority-client";
@@ -213,7 +216,7 @@ function isLiveReadSurface(moduleId: string) {
 }
 
 function isMutationSurface(moduleId: string) {
-  return ["accounts", "identities", "contexts", "principals", "badges", "grants"].includes(moduleId);
+  return ["accounts", "identities", "contexts", "principals", "badges", "grants", "keys"].includes(moduleId);
 }
 
 type MutationState =
@@ -387,7 +390,10 @@ export function AuthorityPlaceholderPage() {
           return;
         }
 
-        const response = await readPrincipalKeys(controller.signal, { limit: 100 });
+        const [response, principals] = await Promise.all([
+          readPrincipalKeys(controller.signal, { limit: 100 }),
+          readPrincipals(controller.signal, { limit: 100 }),
+        ]);
         setReadState({
           status: response.items.length ? "ready" : "empty",
           detail: response.items.length
@@ -397,7 +403,7 @@ export function AuthorityPlaceholderPage() {
           contexts: [],
           identities: [],
           badges: [],
-          principals: [],
+          principals: principals.items,
           grants: [],
           keys: response.items,
         });
@@ -658,6 +664,8 @@ function AuthorityMutationPanel({
           <BadgeMutationFields badges={readState.badges} defaultContextId={snapshotContextId} />
         ) : moduleId === "grants" ? (
           <GrantMutationFields badges={readState.badges} principals={readState.principals} defaultContextId={snapshotContextId} />
+        ) : moduleId === "keys" ? (
+          <KeyMutationFields keys={readState.keys} principals={readState.principals} />
         ) : (
           <ContextMutationFields contexts={readState.contexts} />
         )}
@@ -916,6 +924,59 @@ function GrantMutationFields({
   );
 }
 
+function KeyMutationFields({
+  keys,
+  principals,
+}: {
+  keys: PrincipalKeyReadModel[];
+  principals: PrincipalReadModel[];
+}) {
+  return (
+    <div className="authority-form__grid">
+      <label>
+        Mode
+        <select name="key_command" required defaultValue="principal_key.register">
+          <option value="principal_key.register">register</option>
+          <option value="principal_key.rotate">rotate</option>
+          <option value="principal_key.revoke">revoke</option>
+        </select>
+      </label>
+      <label>
+        Principal ID
+        <input name="principal_id" list="key-principal-options" required />
+        <datalist id="key-principal-options">
+          {principals.map((principal) => (
+            <option value={principal.id} key={principal.id}>{principal.principal_type}</option>
+          ))}
+        </datalist>
+      </label>
+      <label>
+        Key ID
+        <input name="key_id" required placeholder="current, laptop-2026-04, agent-main" />
+      </label>
+      <label>
+        Old Key ID (rotation only)
+        <input name="old_key_id" list="key-id-options" />
+        <datalist id="key-id-options">
+          {keys.map((key) => (
+            <option value={key.key_id} key={key.id}>{key.status}</option>
+          ))}
+        </datalist>
+      </label>
+      <label>
+        Algorithm
+        <select name="algorithm" defaultValue="ed25519">
+          <option value="ed25519">ed25519</option>
+        </select>
+      </label>
+      <label className="authority-form__wide">
+        Public Key
+        <textarea name="public_key" placeholder="Paste public key material only. Never paste a private key here." />
+      </label>
+    </div>
+  );
+}
+
 async function submitAuthorityMutation(moduleId: string, form: FormData) {
   if (moduleId === "accounts") {
     return createAccount({
@@ -968,6 +1029,22 @@ async function submitAuthorityMutation(moduleId: string, form: FormData) {
       ? revokePrincipalBadge(payload)
       : grantPrincipalBadge(payload);
   }
+  if (moduleId === "keys") {
+    const payload = {
+      principal_id: textValue(form, "principal_id"),
+      key_id: textValue(form, "key_id"),
+      old_key_id: optionalTextValue(form, "old_key_id"),
+      algorithm: optionalTextValue(form, "algorithm"),
+      public_key: optionalTextValue(form, "public_key"),
+    };
+    const command = textValue(form, "key_command");
+    if (command === "principal_key.revoke") {
+      return revokePrincipalKey(payload);
+    }
+    return command === "principal_key.rotate"
+      ? rotatePrincipalKey(payload)
+      : registerPrincipalKey(payload);
+  }
   const payload = {
     name: textValue(form, "name"),
     context_id: optionalTextValue(form, "context_id"),
@@ -1002,6 +1079,8 @@ function mutationTitle(moduleId: string) {
       return "Create, Update, Or Archive Badge";
     case "grants":
       return "Grant Or Revoke Badge Permission";
+    case "keys":
+      return "Register, Revoke, Or Rotate Principal Key";
     default:
       return "Controlled Mutation";
   }
@@ -1096,6 +1175,9 @@ function KeyList({ keys }: { keys: PrincipalKeyReadModel[] }) {
             <div className="list-item__body">
               created:{key.created_at ?? "unknown"} · expires:{key.expires_at ?? "not set"} · revoked:
               {key.revoked_at ?? "no"}
+            </div>
+            <div className="list-item__body">
+              sentry binding:{key.issuer_signature_present ? "present" : "missing"}
             </div>
           </div>
           <StatusPill tone={key.revoked_at || key.status !== "active" ? "warning" : "success"} label={key.status || "unknown"} />

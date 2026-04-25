@@ -17,6 +17,7 @@ import type {
   PageInfo,
   PrincipalBadgeGrantMutationPayload,
   PrincipalBadgeGrantReadModel,
+  PrincipalKeyMutationPayload,
   PrincipalKeyReadModel,
   PrincipalReadModel,
 } from "./authority-types";
@@ -238,4 +239,16 @@ export function grantPrincipalBadge(payload: PrincipalBadgeGrantMutationPayload)
 
 export function revokePrincipalBadge(payload: PrincipalBadgeGrantMutationPayload) {
   return mutateJSON("principal_badge.revoke", payload);
+}
+
+export function registerPrincipalKey(payload: PrincipalKeyMutationPayload) {
+  return mutateJSON("principal_key.register", payload);
+}
+
+export function revokePrincipalKey(payload: PrincipalKeyMutationPayload) {
+  return mutateJSON("principal_key.revoke", payload);
+}
+
+export function rotatePrincipalKey(payload: PrincipalKeyMutationPayload) {
+  return mutateJSON("principal_key.rotate", payload);
 }
