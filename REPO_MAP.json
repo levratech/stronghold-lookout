@@ -24,8 +24,9 @@
   ],
   "service_boundaries": {
     "cli_runtime": "Go/Cobra CLI for login, whoami, config get/set/push, message capture, and operator workflows over NATS.",
-    "web_shell": "React/Vite browser cockpit with shell layout, static module registry, and read-first Overview, Sentry, and Aegis operator surfaces.",
-    "session_client": "Same-origin browser session boundary that opens Drawbridge auth, listens for callback completion, refreshes /_/auth/session, and normalizes separate root and active principal metadata.",
+    "web_shell": "React/Vite browser cockpit with shell layout, static module registry, and read-first Overview, Sentry, Aegis, and Authority operator surfaces.",
+    "session_client": "Same-origin browser session boundary that opens Drawbridge auth, listens for callback completion, refreshes /_/auth/session, calls same-origin logout, and normalizes separate root and active principal metadata.",
+    "authority_read_client": "Typed same-origin HTTP client for Sentry authority read surfaces under /_/authority/read without browser-visible transport credentials.",
     "nats_browser_transport": "NATS over WebSocket browser rail used by the cockpit through /_/nats only when a future session-backed transport path is marked ready; the current shell reports transport posture honestly without passing raw secrets.",
     "config_templates": "Tracked JSON files remain examples/templates rather than live estate truth."
   },
@@ -36,13 +37,13 @@
     "The browser shell must not depend on reading the HttpOnly auth cookie directly; it consumes bootstrap/session payloads instead.",
     "The browser shell must not receive or forward reusable transport credentials from session bootstrap payloads.",
     "Static module registration is intentional and keeps the cockpit structure stable without runtime plugin machinery.",
-    "Lookout displays principal and transport posture; it does not own principal key registration, envelope verification, badge truth, or authority issuance.",
+    "Lookout displays principal, badge, key, and transport posture; it does not own principal key registration, envelope verification, badge truth, or authority issuance.",
     "Read-first Sentry/Aegis pages should stay honest about backend gaps rather than implying mature browser-admin APIs exist."
   ],
   "known_risks": [
-    "Backend read surfaces for Sentry and Aegis remain partial, so much of the cockpit is structural/read-first rather than fully operational.",
+    "Authority cockpit reads depend on Sentry same-origin HTTP adapters and Aegis-projected identity headers; if the live edge config does not project those headers, authorized sessions can still be denied.",
     "The browser transport depends on the /_/nats rail being exposed and on Stronghold landing a finalized session-backed credentialing path.",
-    "No same-origin logout endpoint is exposed yet, so the cockpit can clear local hints without actually terminating the browser session cookie.",
+    "Read-first authority surfaces are operational visibility only; create/update/revoke commands remain intentionally deferred.",
     "Template drift from generated runtime config is possible if bootstrap behavior changes and tracked examples are not refreshed.",
     "Repo documentation still needs cleanup where older prose says no session bootstrap exists or says clients are unimplemented; the map reflects the current code, not those stale lines.",
     "As Stronghold envelope enforcement becomes live, Lookout will need explicit UI/runtime posture for signed message authorship rather than only transport readiness."
@@ -61,6 +62,9 @@
     "web/src/lib/nats/NatsProvider.tsx",
     "web/src/lib/session/session-types.ts",
     "web/src/shell/module-registry.tsx",
+    "web/src/lib/authority/authority-client.ts",
+    "web/src/lib/authority/authority-types.ts",
+    "web/src/modules/authority/AuthorityPlaceholderPage.tsx",
     "web/src/modules/overview/OverviewPage.tsx",
     "web/src/modules/sentry/SentryPage.tsx",
     "web/src/modules/aegis/AegisPage.tsx"
@@ -80,6 +84,8 @@
     "web/src/lib/session/session-client.ts",
     "web/src/lib/session/session-types.ts",
     "web/src/lib/nats/NatsProvider.tsx",
+    "web/src/lib/authority/authority-client.ts",
+    "web/src/lib/authority/authority-types.ts",
     "web/src/shell/module-registry.tsx",
     "web/src/modules/overview/OverviewPage.tsx"
   ],
@@ -109,10 +115,17 @@
       "web/src/lib/nats/nats-types.ts",
       "web/src/env.ts"
     ],
+    "authority_read_surfaces": [
+      "web/src/lib/authority/authority-client.ts",
+      "web/src/lib/authority/authority-types.ts",
+      "web/src/modules/authority/AuthorityPlaceholderPage.tsx",
+      "web/src/shell/module-registry.tsx"
+    ],
     "module_surfaces": [
       "web/src/modules/overview/OverviewPage.tsx",
       "web/src/modules/sentry/SentryPage.tsx",
       "web/src/modules/aegis/AegisPage.tsx",
+      "web/src/modules/authority/AuthorityPlaceholderPage.tsx",
       "web/src/lib/domain/sentry.ts",
       "web/src/lib/domain/aegis.ts",
       "web/src/components/ui/MetricCard.tsx",
@@ -162,7 +175,10 @@
     "web/src/lib/session/SessionProvider.tsx",
     "web/src/lib/session/session-client.ts",
     "web/src/lib/session/session-types.ts",
+    "web/src/lib/authority/authority-client.ts",
+    "web/src/lib/authority/authority-types.ts",
     "web/src/main.tsx",
+    "web/src/modules/authority/AuthorityPlaceholderPage.tsx",
     "web/src/modules/aegis/AegisPage.tsx",
     "web/src/modules/overview/OverviewPage.tsx",
     "web/src/modules/sentry/SentryPage.tsx",
