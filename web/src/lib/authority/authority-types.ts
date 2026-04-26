@@ -8,6 +8,21 @@ export interface AccountReadModel {
   domain_id: string;
   email: string;
   provider_id?: string;
+  auth_method_count?: number;
+  auth_providers?: string[];
+}
+
+export interface AccountAuthMethodReadModel {
+  id: string;
+  account_id: string;
+  domain_id: string;
+  method_type: string;
+  provider: string;
+  email?: string;
+  subject_present: boolean;
+  status: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface ContextReadModel {
@@ -89,6 +104,7 @@ export interface AuthorityAuditEventReadModel {
 
 export interface AuthorityOverviewReadModel {
   accounts?: AccountReadModel[];
+  auth_methods?: AccountAuthMethodReadModel[];
   contexts?: ContextReadModel[];
   identities?: IdentityReadModel[];
   principals?: PrincipalReadModel[];
@@ -112,6 +128,7 @@ export interface AuthorityReadFilter {
 export type AuthorityReadSurface =
   | "overview"
   | "accounts"
+  | "auth_methods"
   | "contexts"
   | "identities"
   | "principals"
@@ -124,6 +141,9 @@ export type AuthorityLoadStatus = "idle" | "loading" | "ready" | "denied" | "emp
 
 export type AuthorityMutationCommand =
   | "account.create"
+  | "account_auth_method.link"
+  | "account_auth_method.revoke"
+  | "account_auth_method.status"
   | "identity.create"
   | "principal.create_durable"
   | "context.create"
@@ -160,6 +180,17 @@ export interface CreateAccountPayload {
   email: string;
   password?: string;
   provider_id?: string;
+}
+
+export interface AccountAuthMethodMutationPayload {
+  method_id?: string;
+  account_id?: string;
+  domain_id?: string;
+  method_type?: string;
+  provider?: string;
+  subject?: string;
+  email?: string;
+  status?: string;
 }
 
 export interface CreateIdentityPayload {

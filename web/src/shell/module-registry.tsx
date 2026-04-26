@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 export type LookoutModuleId =
   | "overview"
   | "accounts"
+  | "auth-methods"
   | "identities"
   | "contexts"
   | "badges"
@@ -56,6 +57,19 @@ export const lookoutModules: LookoutModuleDefinition[] = [
     summary: "Account inventory and enrollment posture for identities owned by users.",
     surfaceLabel: "Authority Surface",
     entryHint: "Placeholder now; becomes the account/user read surface in this phase.",
+  },
+  {
+    id: "auth-methods",
+    name: "Auth Methods",
+    navLabel: "Auth Methods",
+    route: "/authority/auth-methods",
+    icon: "AM",
+    description: "Account authentication methods and access posture.",
+    status: "partial",
+    requiredCapabilities: ["accounts:read", "accounts:manage"],
+    summary: "Google, password, and future provider bindings that prove access to an account without becoming identities.",
+    surfaceLabel: "Auth Surface",
+    entryHint: "Manage account login bindings while keeping account, authentication, identity, and badges separate.",
   },
   {
     id: "identities",

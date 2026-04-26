@@ -5,6 +5,8 @@ import {
   signCommandPayload,
 } from "../command-signing/command-signing";
 import type {
+  AccountAuthMethodMutationPayload,
+  AccountAuthMethodReadModel,
   AccountReadModel,
   AuthorityAuditEventReadModel,
   AuthorityOverviewReadModel,
@@ -49,6 +51,7 @@ export interface AuthorityNatsReadTransport {
 interface RawAuthorityListResponse<T> {
   page?: PageInfo;
   accounts?: T[];
+  auth_methods?: T[];
   contexts?: T[];
   identities?: T[];
   principals?: T[];
@@ -235,6 +238,16 @@ export async function readAccounts(signal?: AbortSignal, filter?: AuthorityReadF
   return normalizeList(payload, "accounts") as AuthorityListResponse<AccountReadModel>;
 }
 
+export async function readAccountAuthMethods(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
+  const payload = await readJSON<RawAuthorityListResponse<AccountAuthMethodReadModel>>(
+    "auth_methods",
+    signal,
+    filter,
+    transport,
+  );
+  return normalizeList(payload, "auth_methods") as AuthorityListResponse<AccountAuthMethodReadModel>;
+}
+
 export async function readContexts(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
   const payload = await readJSON<RawAuthorityListResponse<ContextReadModel>>(
     "contexts",
@@ -307,6 +320,18 @@ export async function readAuthorityAuditEvents(signal?: AbortSignal, filter?: Au
 
 export function createAccount(payload: CreateAccountPayload, signing?: AuthorityMutationSigningOptions) {
   return mutateJSON("account.create", payload, signing);
+}
+
+export function linkAccountAuthMethod(payload: AccountAuthMethodMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("account_auth_method.link", payload, signing);
+}
+
+export function revokeAccountAuthMethod(payload: AccountAuthMethodMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("account_auth_method.revoke", payload, signing);
+}
+
+export function setAccountAuthMethodStatus(payload: AccountAuthMethodMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("account_auth_method.status", payload, signing);
 }
 
 export function createIdentity(payload: CreateIdentityPayload, signing?: AuthorityMutationSigningOptions) {

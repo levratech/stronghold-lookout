@@ -18,7 +18,9 @@ import {
   createDurablePrincipal,
   createIdentity,
   grantPrincipalBadge,
+  linkAccountAuthMethod,
   readAccounts,
+  readAccountAuthMethods,
   readAuthorityAuditEvents,
   readBadgeDefinitions,
   readBadgeGrants,
@@ -27,14 +29,17 @@ import {
   readPrincipalKeys,
   readPrincipals,
   registerPrincipalKey,
+  revokeAccountAuthMethod,
   revokePrincipalBadge,
   revokePrincipalKey,
   rotatePrincipalKey,
+  setAccountAuthMethodStatus,
   updateBadgeDefinition,
   updateContext,
   type AuthorityMutationSigningOptions,
 } from "../../lib/authority/authority-client";
 import type {
+  AccountAuthMethodReadModel,
   AccountReadModel,
   AuthorityAuditEventReadModel,
   AuthorityMutationCommand,
@@ -84,6 +89,11 @@ const surfaceNotes: Record<string, string[]> = {
     "Read account/user records without password hashes or OAuth secrets.",
     "Show enrollment posture before exposing any account creation controls.",
     "Use Sentry authority reads only; Lookout must not talk directly to Postgres.",
+  ],
+  "auth-methods": [
+    "Show account authentication methods as ways to prove access to an account.",
+    "Never treat Google, password, or provider bindings as identities, badges, or principal authority.",
+    "Provider subjects and password material stay redacted; status changes alter account access posture only.",
   ],
   identities: [
     "Show identity records linked to accounts and contexts.",
@@ -141,6 +151,7 @@ type LiveReadState =
       status: "idle";
       detail: string;
       accounts: AccountReadModel[];
+      authMethods: AccountAuthMethodReadModel[];
       contexts: ContextReadModel[];
       identities: IdentityReadModel[];
       badges: BadgeDefinitionReadModel[];
@@ -153,6 +164,7 @@ type LiveReadState =
       status: AuthorityLoadStatus;
       detail: string;
       accounts: AccountReadModel[];
+      authMethods: AccountAuthMethodReadModel[];
       contexts: ContextReadModel[];
       identities: IdentityReadModel[];
       badges: BadgeDefinitionReadModel[];
@@ -215,6 +227,8 @@ function liveSurfaceLabel(moduleId: string) {
   switch (moduleId) {
     case "accounts":
       return "Account Inventory";
+    case "auth-methods":
+      return "Authentication Methods";
     case "identities":
       return "Identity Lineage";
     case "contexts":
@@ -235,11 +249,11 @@ function liveSurfaceLabel(moduleId: string) {
 }
 
 function isLiveReadSurface(moduleId: string) {
-  return ["accounts", "identities", "contexts", "badges", "principals", "grants", "keys", "audit"].includes(moduleId);
+  return ["accounts", "auth-methods", "identities", "contexts", "badges", "principals", "grants", "keys", "audit"].includes(moduleId);
 }
 
 function isMutationSurface(moduleId: string) {
-  return ["accounts", "identities", "contexts", "principals", "badges", "grants", "keys"].includes(moduleId);
+  return ["accounts", "auth-methods", "identities", "contexts", "principals", "badges", "grants", "keys"].includes(moduleId);
 }
 
 function isCommandSigningSurface(moduleId: string) {
@@ -315,6 +329,7 @@ export function AuthorityPlaceholderPage() {
     status: "idle",
     detail: "This authority surface has not requested data yet.",
     accounts: [],
+    authMethods: [],
     contexts: [],
     identities: [],
     badges: [],
@@ -330,6 +345,7 @@ export function AuthorityPlaceholderPage() {
         status: "idle",
         detail: "This surface remains a read-first placeholder until its work order lands.",
         accounts: [],
+        authMethods: [],
         contexts: [],
         identities: [],
         badges: [],
@@ -348,6 +364,7 @@ export function AuthorityPlaceholderPage() {
         authorityReadTransport ? "browser NATS" : "the Sentry HTTP authority read adapter"
       }.`,
       accounts: [],
+      authMethods: [],
       contexts: [],
       identities: [],
       badges: [],
@@ -367,6 +384,30 @@ export function AuthorityPlaceholderPage() {
               ? `Accounts loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
               : "No accounts were returned for this session scope.",
             accounts: response.items,
+            authMethods: [],
+            contexts: [],
+            identities: [],
+            badges: [],
+            principals: [],
+            grants: [],
+            keys: [],
+            auditEvents: [],
+          });
+          return;
+        }
+
+        if (module?.id === "auth-methods") {
+          const [response, accounts] = await Promise.all([
+            readAccountAuthMethods(controller.signal, { limit: 100 }, authorityReadTransport),
+            readAccounts(controller.signal, { limit: 100 }, authorityReadTransport),
+          ]);
+          setReadState({
+            status: response.items.length ? "ready" : "empty",
+            detail: response.items.length
+              ? `Authentication methods loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
+              : "No account authentication methods were returned for this session scope.",
+            accounts: accounts.items,
+            authMethods: response.items,
             contexts: [],
             identities: [],
             badges: [],
@@ -386,6 +427,7 @@ export function AuthorityPlaceholderPage() {
               ? `Identities and paired principals loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
               : "No identities were returned for this session scope.",
             accounts: [],
+            authMethods: [],
             contexts: [],
             identities: response.items,
             badges: [],
@@ -405,6 +447,7 @@ export function AuthorityPlaceholderPage() {
               ? `Contexts loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
               : "No contexts were returned for this session scope.",
             accounts: [],
+            authMethods: [],
             contexts: response.items,
             identities: [],
             badges: [],
@@ -424,6 +467,7 @@ export function AuthorityPlaceholderPage() {
               ? `Badge definitions loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
               : "No badge definitions were returned for this session scope.",
             accounts: [],
+            authMethods: [],
             contexts: [],
             identities: [],
             badges: response.items,
@@ -443,6 +487,7 @@ export function AuthorityPlaceholderPage() {
               ? `Principals loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
               : "No principals were returned for this session scope.",
             accounts: [],
+            authMethods: [],
             contexts: [],
             identities: [],
             badges: [],
@@ -466,6 +511,7 @@ export function AuthorityPlaceholderPage() {
               ? `Badge grants loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
               : "No badge grants were returned for this session scope.",
             accounts: [],
+            authMethods: [],
             contexts: [],
             identities: [],
             badges: badges.items,
@@ -485,6 +531,7 @@ export function AuthorityPlaceholderPage() {
               ? `Authority audit events loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
               : "No authority audit events were returned for this session scope.",
             accounts: [],
+            authMethods: [],
             contexts: [],
             identities: [],
             badges: [],
@@ -506,6 +553,7 @@ export function AuthorityPlaceholderPage() {
             ? `Principal key posture loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
             : "No principal keys were returned for this session scope.",
           accounts: [],
+          authMethods: [],
           contexts: [],
           identities: [],
           badges: [],
@@ -525,6 +573,7 @@ export function AuthorityPlaceholderPage() {
               ? error.message
               : "Unknown authority read failure.",
           accounts: [],
+          authMethods: [],
           contexts: [],
           identities: [],
           badges: [],
@@ -714,6 +763,8 @@ export function AuthorityPlaceholderPage() {
               <AuthorityReadNotice status={readState.status} detail={readState.detail} sessionStatus={snapshot.status} />
             ) : module.id === "accounts" ? (
               <AccountList accounts={readState.accounts} />
+            ) : module.id === "auth-methods" ? (
+              <AuthMethodList methods={readState.authMethods} accounts={readState.accounts} />
             ) : module.id === "identities" ? (
               <IdentityList identities={readState.identities} />
             ) : module.id === "contexts" ? (
@@ -858,7 +909,7 @@ export function AuthorityPlaceholderPage() {
           description="Controls stay limited to the Sentry-backed read and mutation surfaces that already exist."
         >
           <div className="empty-state">
-            Lookout can inspect audit evidence and submit controlled account, identity, context,
+            Lookout can inspect audit evidence and submit controlled account, auth-method, identity, context,
             badge, grant, and key mutations. Browser transport activation, key recovery, and broader
             mutation auditing still need their own work orders.
           </div>
@@ -961,6 +1012,8 @@ function AuthorityMutationPanel({
       <form className="authority-form" onSubmit={submit}>
         {moduleId === "accounts" ? (
           <AccountMutationFields defaultDomainId={snapshotContextId} />
+        ) : moduleId === "auth-methods" ? (
+          <AuthMethodMutationFields accounts={readState.accounts} defaultDomainId={snapshotContextId} />
         ) : moduleId === "identities" ? (
           <IdentityMutationFields accounts={readState.accounts} contexts={readState.contexts} defaultContextId={snapshotContextId} />
         ) : moduleId === "principals" ? (
@@ -1465,6 +1518,70 @@ function AccountMutationFields({ defaultDomainId }: { defaultDomainId: string })
   );
 }
 
+function AuthMethodMutationFields({
+  accounts,
+  defaultDomainId,
+}: {
+  accounts: AccountReadModel[];
+  defaultDomainId: string;
+}) {
+  return (
+    <div className="authority-form__grid">
+      <label>
+        Mode
+        <select name="auth_method_command" required defaultValue="account_auth_method.link">
+          <option value="account_auth_method.link">link external method</option>
+          <option value="account_auth_method.status">set status</option>
+          <option value="account_auth_method.revoke">revoke</option>
+        </select>
+      </label>
+      <label>
+        Account
+        <select name="account_id" defaultValue="">
+          <option value="">Required for link</option>
+          {accounts.map((account) => (
+            <option value={account.id} key={account.id}>{account.email || account.id}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Method ID
+        <input name="method_id" placeholder="Required for status/revoke, optional for link" />
+      </label>
+      <label>
+        Domain ID
+        <input name="domain_id" defaultValue={defaultDomainId} />
+      </label>
+      <label>
+        Method Type
+        <select name="method_type" defaultValue="external_provider">
+          <option value="external_provider">external_provider</option>
+        </select>
+      </label>
+      <label>
+        Provider
+        <input name="provider" placeholder="google, github, microsoft" />
+      </label>
+      <label>
+        Provider Subject
+        <input name="subject" placeholder="Opaque provider subject for link only" />
+      </label>
+      <label>
+        Email
+        <input name="email" type="email" placeholder="Provider email, if available" />
+      </label>
+      <label>
+        Status
+        <select name="status" defaultValue="active">
+          <option value="active">active</option>
+          <option value="disabled">disabled</option>
+          <option value="revoked">revoked</option>
+        </select>
+      </label>
+    </div>
+  );
+}
+
 function IdentityMutationFields({
   accounts,
   contexts,
@@ -1747,6 +1864,25 @@ async function submitAuthorityMutation(
       provider_id: optionalTextValue(form, "provider_id"),
     }, signingFor(command, signingOptions));
   }
+  if (moduleId === "auth-methods") {
+    const command = textValue(form, "auth_method_command") as AuthorityMutationCommand;
+    const payload = {
+      method_id: optionalTextValue(form, "method_id"),
+      account_id: optionalTextValue(form, "account_id"),
+      domain_id: optionalTextValue(form, "domain_id"),
+      method_type: optionalTextValue(form, "method_type"),
+      provider: optionalTextValue(form, "provider"),
+      subject: optionalTextValue(form, "subject"),
+      email: optionalTextValue(form, "email"),
+      status: optionalTextValue(form, "status"),
+    };
+    if (command === "account_auth_method.revoke") {
+      return revokeAccountAuthMethod(payload, signingFor(command, signingOptions));
+    }
+    return command === "account_auth_method.status"
+      ? setAccountAuthMethodStatus(payload, signingFor(command, signingOptions))
+      : linkAccountAuthMethod(payload, signingFor("account_auth_method.link", signingOptions));
+  }
   if (moduleId === "identities") {
     const command: AuthorityMutationCommand = "identity.create";
     return createIdentity({
@@ -1849,6 +1985,8 @@ function mutationTitle(moduleId: string) {
   switch (moduleId) {
     case "accounts":
       return "Create Account / Enrollment";
+    case "auth-methods":
+      return "Link, Disable, Or Revoke Account Auth Method";
     case "identities":
       return "Create Identity In Context";
     case "principals":
@@ -2216,10 +2354,56 @@ function AccountList({ accounts }: { accounts: AccountReadModel[] }) {
             <div className="list-item__body">
               account:{account.id} · domain:{account.domain_id || "unknown"}
             </div>
+            <div className="list-item__body">
+              auth methods:{account.auth_method_count ?? 0} · providers:
+              {account.auth_providers?.length ? account.auth_providers.join(", ") : "none reported"}
+            </div>
           </div>
-          <StatusPill tone={account.provider_id ? "success" : "neutral"} label={account.provider_id ? "external" : "local"} />
+          <StatusPill tone={(account.auth_method_count ?? 0) > 0 || account.provider_id ? "success" : "neutral"} label={(account.auth_method_count ?? 0) > 0 ? "bound" : account.provider_id ? "legacy" : "unbound"} />
         </div>
       ))}
+    </div>
+  );
+}
+
+function AuthMethodList({
+  methods,
+  accounts,
+}: {
+  methods: AccountAuthMethodReadModel[];
+  accounts: AccountReadModel[];
+}) {
+  if (!methods.length) {
+    return <div className="empty-state">No account authentication methods are visible yet.</div>;
+  }
+
+  const accountById = new Map(accounts.map((account) => [account.id, account]));
+  return (
+    <div className="list">
+      {methods.map((method) => {
+        const account = accountById.get(method.account_id);
+        return (
+          <div className="list-item" key={method.id}>
+            <div>
+              <div className="list-item__title">{method.provider || method.method_type || method.id}</div>
+              <div className="list-item__body">
+                method:{method.id} · type:{method.method_type} · status:{method.status || "unknown"}
+              </div>
+              <div className="list-item__body">
+                account:{account?.email ?? method.account_id} · domain:{method.domain_id}
+              </div>
+              <div className="list-item__body">
+                subject:{method.subject_present ? "present and redacted" : "not present"} · email:
+                {method.email ?? "not recorded"}
+              </div>
+              <div className="list-item__body">
+                created:{method.created_at ?? "unknown"} · updated:{method.updated_at ?? "unknown"}
+              </div>
+            </div>
+            <StatusPill tone={method.status === "active" ? "success" : method.status === "disabled" ? "warning" : "danger"} label={method.status || "unknown"} />
+          </div>
+        );
+      })}
     </div>
   );
 }
