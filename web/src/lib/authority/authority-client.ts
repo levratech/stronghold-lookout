@@ -220,6 +220,8 @@ async function mutateJSON<T extends object>(
 
 export function authorityMutationRequiresSignature(command: AuthorityMutationCommand) {
   return [
+    "context.create",
+    "context.update",
     "principal_badge.grant",
     "principal_badge.revoke",
     "context_service.provision",
