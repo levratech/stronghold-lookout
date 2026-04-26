@@ -725,11 +725,72 @@ button {
   gap: 10px;
 }
 
+.resource-list-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.resource-list-controls {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(130px, 0.55fr) minmax(130px, 0.55fr);
+  gap: 10px;
+}
+
+.resource-list-controls label,
+.resource-column-picker label {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.resource-list-controls label {
+  display: grid;
+  gap: 7px;
+}
+
+.resource-list-controls input,
+.resource-list-controls select {
+  width: 100%;
+  border: 1px solid rgba(130, 161, 184, 0.18);
+  border-radius: 12px;
+  background: rgba(8, 17, 26, 0.72);
+  color: var(--text-strong);
+  padding: 10px 11px;
+  font: inherit;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.resource-column-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid rgba(130, 161, 184, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.resource-column-picker legend {
+  padding: 0 6px;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.resource-column-picker label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .resource-list__row {
   width: 100%;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 16px;
   padding: 14px 16px;
   border-radius: 16px;
@@ -755,6 +816,25 @@ button {
   min-width: 0;
   display: grid;
   gap: 5px;
+}
+
+.resource-list__cell {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.resource-list__label {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.resource-list__value {
+  color: var(--text-strong);
+  line-height: 1.45;
+  word-break: break-word;
 }
 
 .resource-list__title {
@@ -940,6 +1020,7 @@ code {
   }
 
   .authority-form__grid,
+  .resource-list-controls,
   .resource-interface__grid {
     grid-template-columns: 1fr;
   }

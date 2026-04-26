@@ -40,6 +40,15 @@ export interface ResourceRecordSummary {
   lifecycleActions?: ResourceLifecycleAction[];
 }
 
+export interface ResourceListColumn {
+  id: string;
+  label: string;
+  defaultVisible?: boolean;
+  render: (record: ResourceRecordSummary) => ReactNode;
+  sortValue?: (record: ResourceRecordSummary) => string | number | null | undefined;
+  searchValue?: (record: ResourceRecordSummary) => string;
+}
+
 export interface ResourceInterfaceState {
   status: ResourceInterfaceStatus;
   detail: string;
