@@ -38,6 +38,7 @@ const contractRecords: ResourceRecordSummary[] = [
         id: "archive",
         label: "Archive",
         kind: "archive",
+        confirmationLabel: "archive marker",
         description: "Marks the resource archived without physical delete.",
       },
     ],
@@ -79,11 +80,15 @@ const contractRecords: ResourceRecordSummary[] = [
         id: "disable",
         label: "Disable",
         kind: "disable",
+        confirmationLabel: "disable marker",
+        description: "Disables a badge without deleting its definition or history.",
       },
       {
         id: "archive",
         label: "Archive",
         kind: "archive",
+        confirmationLabel: "archive marker",
+        description: "Archives the badge definition when a backend lifecycle mutation is mounted.",
       },
     ],
     raw: {

@@ -21,6 +21,13 @@ export interface ResourceLifecycleAction {
   kind: ResourceLifecycleKind;
   disabled?: boolean;
   description?: string;
+  confirmationLabel?: string;
+}
+
+export interface ResourceLifecycleResult {
+  status: "accepted" | "denied" | "invalid" | "error";
+  detail: string;
+  evidenceId?: string;
 }
 
 export interface ResourceRecordField {

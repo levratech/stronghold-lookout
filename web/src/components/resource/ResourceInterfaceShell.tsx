@@ -4,6 +4,8 @@ import { StatusPill } from "../ui/StatusPill";
 import type {
   ResourceInterfaceState,
   ResourceListColumn,
+  ResourceLifecycleAction,
+  ResourceLifecycleResult,
   ResourceRecordSummary,
 } from "./resource-types";
 
@@ -35,6 +37,10 @@ export interface ResourceInterfaceShellProps {
   editSlot?: ReactNode;
   detailSlot?: ReactNode;
   lifecycleSlot?: ReactNode;
+  onLifecycleAction?: (
+    record: ResourceRecordSummary,
+    action: ResourceLifecycleAction,
+  ) => Promise<ResourceLifecycleResult> | ResourceLifecycleResult;
 }
 
 export function ResourceInterfaceShell({
@@ -50,6 +56,7 @@ export function ResourceInterfaceShell({
   editSlot,
   detailSlot,
   lifecycleSlot,
+  onLifecycleAction,
 }: ResourceInterfaceShellProps) {
   const columns = useMemo(
     () => listColumns?.length ? listColumns : defaultResourceColumns,
@@ -66,6 +73,14 @@ export function ResourceInterfaceShell({
           .map((column) => column.id),
       ),
   );
+  const [pendingLifecycle, setPendingLifecycle] = useState<{
+    record: ResourceRecordSummary;
+    action: ResourceLifecycleAction;
+  }>();
+  const [lifecycleResult, setLifecycleResult] = useState<ResourceLifecycleResult>({
+    status: "accepted",
+    detail: "No lifecycle action has been submitted in this view.",
+  });
   const visibleColumns = columns.filter((column) => visibleColumnIds.has(column.id));
   const filteredRecords = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -236,7 +251,46 @@ export function ResourceInterfaceShell({
           {editSlot}
           {lifecycleSlot ??
             (selectedRecord ? (
-              <ResourceLifecycleActions record={selectedRecord} />
+              <ResourceLifecycleActions
+                record={selectedRecord}
+                result={lifecycleResult}
+                pending={pendingLifecycle}
+                onCancel={() => setPendingLifecycle(undefined)}
+                onConfirm={async () => {
+                  if (!pendingLifecycle) {
+                    return;
+                  }
+                  if (!onLifecycleAction) {
+                    setLifecycleResult({
+                      status: "invalid",
+                      detail:
+                        "No backend lifecycle handler is mounted for this resource contract yet.",
+                    });
+                    setPendingLifecycle(undefined);
+                    return;
+                  }
+                  try {
+                    const result = await onLifecycleAction(
+                      pendingLifecycle.record,
+                      pendingLifecycle.action,
+                    );
+                    setLifecycleResult(result);
+                  } catch (error) {
+                    setLifecycleResult({
+                      status: "error",
+                      detail:
+                        error instanceof Error
+                          ? error.message
+                          : "Lifecycle action failed without a typed error.",
+                    });
+                  } finally {
+                    setPendingLifecycle(undefined);
+                  }
+                }}
+                onRequest={(action) =>
+                  setPendingLifecycle({ record: selectedRecord, action })
+                }
+              />
             ) : (
               <div className="empty-state">
                 Select a record before lifecycle controls are shown.
@@ -366,7 +420,21 @@ function ResourceRecordDetail({ record }: { record: ResourceRecordSummary }) {
   );
 }
 
-function ResourceLifecycleActions({ record }: { record: ResourceRecordSummary }) {
+function ResourceLifecycleActions({
+  record,
+  result,
+  pending,
+  onRequest,
+  onConfirm,
+  onCancel,
+}: {
+  record: ResourceRecordSummary;
+  result: ResourceLifecycleResult;
+  pending?: { record: ResourceRecordSummary; action: ResourceLifecycleAction };
+  onRequest: (action: ResourceLifecycleAction) => void;
+  onConfirm: () => Promise<void>;
+  onCancel: () => void;
+}) {
   const actions = record.lifecycleActions ?? [];
 
   if (!actions.length) {
@@ -378,21 +446,61 @@ function ResourceLifecycleActions({ record }: { record: ResourceRecordSummary })
   }
 
   return (
-    <div className="resource-actions">
-      {actions.map((action) => (
-        <button
-          className={`button ${
-            action.kind === "archive" || action.kind === "disable" || action.kind === "revoke"
-              ? "button--danger"
-              : "button--secondary"
-          }`}
-          disabled={action.disabled}
-          key={action.id}
-          type="button"
-        >
-          {action.label}
-        </button>
-      ))}
+    <div className="stack">
+      <div className="resource-actions">
+        {actions.map((action) => (
+          <button
+            className={`button ${
+              action.kind === "archive" || action.kind === "disable" || action.kind === "revoke"
+                ? "button--danger"
+                : "button--secondary"
+            }`}
+            disabled={action.disabled}
+            key={action.id}
+            onClick={() => onRequest(action)}
+            type="button"
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
+      {pending ? (
+        <div className="resource-confirmation">
+          <div>
+            <div className="resource-confirmation__title">
+              Confirm {pending.action.confirmationLabel ?? pending.action.label}
+            </div>
+            <div className="resource-confirmation__body">
+              {pending.action.description ??
+                "This action should call a resource-specific backend mutation and leave evidence."}
+            </div>
+            <div className="resource-confirmation__body">
+              Target: {pending.record.title} ({pending.record.id})
+            </div>
+          </div>
+          <div className="button-row">
+            <button className="button button--danger" onClick={() => void onConfirm()} type="button">
+              Confirm
+            </button>
+            <button className="button button--ghost" onClick={onCancel} type="button">
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+      <div className={`state-notice ${
+        result.status === "accepted"
+          ? "state-notice--success"
+          : result.status === "denied" || result.status === "error"
+            ? "state-notice--error"
+            : "state-notice--warning"
+      }`}>
+        <div className="state-notice__title">Lifecycle Evidence</div>
+        <div className="state-notice__body">
+          {result.detail}
+          {result.evidenceId ? ` Evidence: ${result.evidenceId}` : ""}
+        </div>
+      </div>
     </div>
   );
 }

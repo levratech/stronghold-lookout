@@ -860,6 +860,26 @@ button {
   gap: 10px;
 }
 
+.resource-confirmation {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(247, 178, 103, 0.24);
+  background: rgba(247, 178, 103, 0.08);
+}
+
+.resource-confirmation__title {
+  color: var(--text-strong);
+  font-weight: 620;
+  margin-bottom: 5px;
+}
+
+.resource-confirmation__body {
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
 .resource-relationships {
   display: grid;
   gap: 10px;
