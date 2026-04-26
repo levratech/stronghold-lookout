@@ -51,6 +51,7 @@ export interface BrowserCommandSigningKeyRegistration {
 
 export interface CommandPayloadSignature {
   principalId: string;
+  identityId?: string;
   keyId: string;
   algorithm: "ed25519";
   issuedAt: string;
@@ -229,12 +230,14 @@ export async function generateAndStoreBrowserCommandSigningKey(
 
 export async function signCommandPayload({
   principalId,
+  identityId,
   keyId,
   data,
   dataJSON,
   ttlSeconds = defaultEnvelopeTTLSeconds,
 }: {
   principalId: string;
+  identityId?: string;
   keyId?: string;
   data: unknown;
   dataJSON?: string;
@@ -253,6 +256,7 @@ export async function signCommandPayload({
   const expiresAtText = formatRFC3339NanoLikeGo(expiresAt);
   const signingPayloadJSON = await signingPayloadJSONFor({
     principalId,
+    identityId,
     keyId: key.key_id,
     issuedAt: issuedAtText,
     expiresAt: expiresAtText,
@@ -267,6 +271,7 @@ export async function signCommandPayload({
 
   return {
     principalId,
+    identityId,
     keyId: key.key_id,
     algorithm: strongholdAlgorithmName,
     issuedAt: issuedAtText,
@@ -280,9 +285,13 @@ export async function signCommandPayload({
 }
 
 export function commandAuthHeaderValue(signature: CommandPayloadSignature, identityId?: string) {
+  const resolvedIdentityId = identityId || signature.identityId;
+  if (identityId && signature.identityId && identityId !== signature.identityId) {
+    throw new Error("Command signature identity does not match the requested command-auth identity.");
+  }
   return base64RawURL(new TextEncoder().encode(JSON.stringify({
     principal_sig: signature.principalSignature,
-    identity_id: identityId || undefined,
+    identity_id: resolvedIdentityId || undefined,
     principal_id: signature.principalId,
     key_id: signature.keyId,
     iat: signature.issuedAt,
@@ -306,7 +315,7 @@ export async function buildSignedCommandEnvelope({
   data: unknown;
   ttlSeconds?: number;
 }): Promise<SignedCommandEnvelope> {
-  const signature = await signCommandPayload({ principalId, keyId, data, ttlSeconds });
+  const signature = await signCommandPayload({ principalId, identityId, keyId, data, ttlSeconds });
   return {
     auth: {
       issuer_sig: issuerSignature,
@@ -340,6 +349,7 @@ async function exportRawPublicKey(publicKey: CryptoKey) {
 
 async function signingPayloadJSONFor({
   principalId,
+  identityId,
   keyId,
   issuedAt,
   expiresAt,
@@ -347,6 +357,7 @@ async function signingPayloadJSONFor({
   dataJSON,
 }: {
   principalId: string;
+  identityId?: string;
   keyId: string;
   issuedAt: string;
   expiresAt: string;
@@ -355,6 +366,7 @@ async function signingPayloadJSONFor({
 }) {
   const dataHash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(dataJSON));
   return JSON.stringify({
+    identity_id: identityId || undefined,
     principal_id: principalId,
     key_id: keyId,
     iat: issuedAt,

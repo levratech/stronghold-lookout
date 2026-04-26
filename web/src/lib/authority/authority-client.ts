@@ -185,6 +185,7 @@ async function mutateJSON<T extends object>(
     };
     const signature = await signCommandPayload({
       principalId: signing.principalId,
+      identityId: signing.identityId,
       keyId: signing.keyId,
       data: signedData,
     });

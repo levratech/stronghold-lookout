@@ -719,6 +719,7 @@ export function AuthorityPlaceholderPage() {
     try {
       const smoke = await signCommandPayload({
         principalId,
+        identityId: activePrincipal?.identityId,
         keyId,
         data: {
           command_type: "lookout.command_signing.smoke",
@@ -1192,6 +1193,7 @@ function DelegatedTransportDrillPanel({
       const body = JSON.stringify(payload);
       const signature = await signCommandPayload({
         principalId: activePrincipalId,
+        identityId: activeIdentityId,
         keyId: state.posture.keyId,
         data: {
           command_type: "nats_transport_credential.issue",
@@ -1313,6 +1315,7 @@ function DelegatedTransportDrillPanel({
       const replayBody = JSON.stringify(replayPayload);
       const replaySignature = await signCommandPayload({
         principalId: activePrincipalId,
+        identityId: activeIdentityId,
         keyId: state.posture.keyId,
         data: {
           command_type: "nats_transport_credential.issue",
@@ -1359,6 +1362,7 @@ function DelegatedTransportDrillPanel({
         const foreignBody = JSON.stringify(foreignPayload);
         const foreignSignature = await signCommandPayload({
           principalId: activePrincipalId,
+          identityId: activeIdentityId,
           keyId: state.posture.keyId,
           data: {
             command_type: "nats_transport_credential.issue",
