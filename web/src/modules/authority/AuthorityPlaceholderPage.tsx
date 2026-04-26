@@ -856,7 +856,12 @@ export function AuthorityPlaceholderPage() {
             ) : module.id === "auth-methods" ? (
               <AuthMethodList methods={readState.authMethods} accounts={readState.accounts} />
             ) : module.id === "identities" ? (
-              <IdentityList identities={readState.identities} accounts={readState.accounts} contexts={readState.contexts} />
+              <IdentityList
+                state={{ status: readState.status, detail: readState.detail }}
+                identities={readState.identities}
+                accounts={readState.accounts}
+                contexts={readState.contexts}
+              />
             ) : module.id === "contexts" ? (
               <ContextManagerReadSurface
                 state={{ status: readState.status, detail: readState.detail }}
@@ -3053,43 +3058,124 @@ function AuthMethodList({
 }
 
 function IdentityList({
+  state,
   identities,
   accounts,
   contexts,
 }: {
+  state: ResourceInterfaceState;
   identities: IdentityReadModel[];
   accounts: AccountReadModel[];
   contexts: ContextReadModel[];
 }) {
-  if (!identities.length) {
-    return <div className="empty-state">No identity records are visible yet.</div>;
-  }
-
   const accountsById = new Map(accounts.map((account) => [account.id, account]));
   const contextsById = new Map(contexts.map((context) => [context.id, context]));
+  const records: ResourceRecordSummary[] = identities.map((identity) => {
+    const account = accountsById.get(identity.account_id);
+    const context = contextsById.get(identity.context_id);
+    const durable = !identity.principal.is_ephemeral;
+    return {
+      id: identity.id,
+      title: account?.email ?? identity.id,
+      subtitle: `context:${context?.name ?? identity.context_id} · principal:${identity.principal_id}`,
+      status: durable ? "durable" : "ephemeral",
+      statusTone: durable ? "success" : "warning",
+      tags: [
+        identity.principal.principal_type,
+        `badges:${identity.badge_ids?.length ?? 0}`,
+        `lineage:${identity.lineage?.length ?? 0}`,
+      ],
+      fields: [
+        { label: "Account", value: account?.email ?? identity.account_id },
+        { label: "Account ID", value: identity.account_id },
+        { label: "Context", value: context?.name ?? identity.context_id },
+        { label: "Context ID", value: identity.context_id },
+        { label: "Principal", value: identity.principal_id },
+        { label: "Principal Type", value: identity.principal.principal_type },
+        { label: "Badges", value: identity.badge_ids?.length ?? 0 },
+      ],
+      relationships: [
+        {
+          label: "Account",
+          value: account?.email ?? identity.account_id,
+          detail: "The account owns authentication and may have multiple context-bound identities.",
+          tone: account ? "success" : "warning",
+        },
+        {
+          label: "Context",
+          value: context?.name ?? identity.context_id,
+          detail: "Authority is scoped through this identity in this context, not across account siblings.",
+          tone: context ? "success" : "warning",
+        },
+        {
+          label: "Paired principal",
+          value: identity.principal_id,
+          detail: "The principal is the execution/authorship surface paired with this identity.",
+          tone: durable ? "success" : "warning",
+        },
+      ],
+      raw: identity,
+    };
+  });
+  const columns: ResourceListColumn[] = [
+    {
+      id: "account",
+      label: "Account",
+      render: (record) => record.fields?.find((field) => field.label === "Account")?.value ?? record.title,
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Account")?.value ?? record.title),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Account")?.value ?? record.title),
+    },
+    {
+      id: "context",
+      label: "Context",
+      render: (record) => record.fields?.find((field) => field.label === "Context")?.value ?? "unknown",
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Context")?.value ?? ""),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Context")?.value ?? ""),
+    },
+    {
+      id: "principal_type",
+      label: "Type",
+      render: (record) => record.fields?.find((field) => field.label === "Principal Type")?.value ?? "unknown",
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Principal Type")?.value ?? ""),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Principal Type")?.value ?? ""),
+    },
+    {
+      id: "status",
+      label: "Status",
+      render: (record) => (
+        <StatusPill tone={record.statusTone ?? "neutral"} label={record.status ?? "unknown"} />
+      ),
+      sortValue: (record) => record.status ?? "",
+      searchValue: (record) => record.status ?? "",
+    },
+    {
+      id: "id",
+      label: "Identity ID",
+      render: (record) => <span className="resource-list__id">{record.id}</span>,
+      sortValue: (record) => record.id,
+      searchValue: (record) => record.id,
+    },
+  ];
 
   return (
-    <div className="list">
-      {identities.map((identity) => (
-        <div className="list-item" key={identity.id}>
-          <div>
-            <div className="list-item__title">{identity.id}</div>
-            <div className="list-item__body">
-              account:{accountsById.get(identity.account_id)?.email ?? identity.account_id} · context:
-              {contextsById.get(identity.context_id)?.name ?? identity.context_id} · principal:
-              {identity.principal_id}
-            </div>
-            <div className="list-item__body">
-              account_id:{identity.account_id} · context_id:{identity.context_id}
-            </div>
-            <div className="list-item__body">
-              principal type:{identity.principal.principal_type} · lineage:
-              {identity.lineage?.length ?? 0} · badges:{identity.badge_ids?.length ?? 0}
-            </div>
-          </div>
-          <StatusPill tone={identity.principal.is_ephemeral ? "warning" : "success"} label={identity.principal.is_ephemeral ? "ephemeral" : "durable"} />
+    <ResourceInterfaceShell
+      eyebrow="Identities"
+      title="Identity Resource Interface"
+      summary="Account-owned, context-bound identities with paired principal posture."
+      state={state}
+      records={records}
+      listColumns={columns}
+      showHeader={false}
+      createSlot={
+        <div className="empty-state">
+          Identity, person subject, agent, and service creation remain in the controlled mutation panel until the resource create form is converted.
         </div>
-      ))}
-    </div>
+      }
+      editSlot={
+        <div className="empty-state">
+          Identity edits and lifecycle controls are intentionally not mounted in this pass.
+        </div>
+      }
+    />
   );
 }
