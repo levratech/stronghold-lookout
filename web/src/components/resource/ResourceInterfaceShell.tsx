@@ -340,6 +340,25 @@ function ResourceRecordDetail({ record }: { record: ResourceRecordSummary }) {
           ))}
         </div>
       ) : null}
+      {record.relationships?.length ? (
+        <div className="resource-relationships">
+          <div className="resource-relationships__title">Relationships</div>
+          {record.relationships.map((relationship) => (
+            <div className="resource-relationship" key={relationship.label}>
+              <div>
+                <div className="resource-relationship__label">{relationship.label}</div>
+                <div className="resource-relationship__value">{relationship.value}</div>
+                {relationship.detail ? (
+                  <div className="resource-relationship__detail">{relationship.detail}</div>
+                ) : null}
+              </div>
+              {relationship.tone ? (
+                <StatusPill tone={relationship.tone} label={relationship.tone} />
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
       <pre className="resource-raw">
         {JSON.stringify(record.raw ?? { id: record.id, title: record.title }, null, 2)}
       </pre>

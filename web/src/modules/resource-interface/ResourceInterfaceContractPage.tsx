@@ -14,6 +14,20 @@ const contractRecords: ResourceRecordSummary[] = [
       { label: "Parent", value: "none" },
       { label: "Scope", value: "identity-bound" },
     ],
+    relationships: [
+      {
+        label: "Root identity",
+        value: "id_adam_primary",
+        detail: "Authority is bound to the identity acting in this context, not to every account sibling.",
+        tone: "success",
+      },
+      {
+        label: "Child contexts",
+        value: "available through parent_id hierarchy",
+        detail: "Inherited grant posture is computed at read/evaluation time.",
+        tone: "neutral",
+      },
+    ],
     lifecycleActions: [
       {
         id: "inspect",
@@ -45,6 +59,20 @@ const contractRecords: ResourceRecordSummary[] = [
     fields: [
       { label: "Context", value: "ctx_levratech_personal" },
       { label: "Grant Scope", value: "direct or subtree" },
+    ],
+    relationships: [
+      {
+        label: "Bound context",
+        value: "ctx_levratech_personal",
+        detail: "Badge definitions are created inside a context and do not leap upward.",
+        tone: "success",
+      },
+      {
+        label: "Grant target",
+        value: "identity paired principal",
+        detail: "Grant UI should make identity-facing assignment obvious.",
+        tone: "warning",
+      },
     ],
     lifecycleActions: [
       {

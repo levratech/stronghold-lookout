@@ -860,6 +860,50 @@ button {
   gap: 10px;
 }
 
+.resource-relationships {
+  display: grid;
+  gap: 10px;
+}
+
+.resource-relationships__title {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.resource-relationship {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(130, 161, 184, 0.12);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.resource-relationship__label {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 5px;
+}
+
+.resource-relationship__value {
+  color: var(--text-strong);
+  font-weight: 590;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.resource-relationship__detail {
+  margin-top: 4px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
 .resource-raw {
   margin: 0;
   max-height: 18rem;

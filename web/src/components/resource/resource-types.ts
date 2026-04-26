@@ -28,6 +28,13 @@ export interface ResourceRecordField {
   value: ReactNode;
 }
 
+export interface ResourceRecordRelationship {
+  label: string;
+  value: ReactNode;
+  detail?: string;
+  tone?: "success" | "warning" | "danger" | "neutral";
+}
+
 export interface ResourceRecordSummary {
   id: string;
   title: string;
@@ -36,6 +43,7 @@ export interface ResourceRecordSummary {
   statusTone?: "success" | "warning" | "danger" | "neutral";
   tags?: string[];
   fields?: ResourceRecordField[];
+  relationships?: ResourceRecordRelationship[];
   raw?: unknown;
   lifecycleActions?: ResourceLifecycleAction[];
 }
