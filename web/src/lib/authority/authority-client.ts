@@ -28,6 +28,9 @@ import type {
   PrincipalKeyMutationPayload,
   PrincipalKeyReadModel,
   PrincipalReadModel,
+  ProvisionContextServicePayload,
+  ContextServiceBindingReadModel,
+  ServiceDefinitionReadModel,
 } from "./authority-types";
 
 const commandAuthHeader = "X-Stronghold-Command-Auth";
@@ -57,6 +60,8 @@ interface RawAuthorityListResponse<T> {
   principals?: T[];
   badge_definitions?: T[];
   badge_grants?: T[];
+  service_definitions?: T[];
+  service_bindings?: T[];
   principal_keys?: T[];
   audit_events?: T[];
 }
@@ -110,6 +115,10 @@ function authorityReadSubject(surface: AuthorityReadSurface) {
       return "stronghold.authority.read.badge_definitions";
     case "grants":
       return "stronghold.authority.read.badge_grants";
+    case "service_definitions":
+      return "stronghold.authority.read.service_definitions";
+    case "service_bindings":
+      return "stronghold.authority.read.service_bindings";
     case "keys":
       return "stronghold.authority.read.principal_keys";
     case "audit":
@@ -213,6 +222,7 @@ export function authorityMutationRequiresSignature(command: AuthorityMutationCom
   return [
     "principal_badge.grant",
     "principal_badge.revoke",
+    "context_service.provision",
     "principal_key.revoke",
     "principal_key.rotate",
   ].includes(command);
@@ -299,6 +309,26 @@ export async function readBadgeGrants(signal?: AbortSignal, filter?: AuthorityRe
   return normalizeList(payload, "badge_grants") as AuthorityListResponse<PrincipalBadgeGrantReadModel>;
 }
 
+export async function readServiceDefinitions(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
+  const payload = await readJSON<RawAuthorityListResponse<ServiceDefinitionReadModel>>(
+    "service_definitions",
+    signal,
+    filter,
+    transport,
+  );
+  return normalizeList(payload, "service_definitions") as AuthorityListResponse<ServiceDefinitionReadModel>;
+}
+
+export async function readServiceBindings(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
+  const payload = await readJSON<RawAuthorityListResponse<ContextServiceBindingReadModel>>(
+    "service_bindings",
+    signal,
+    filter,
+    transport,
+  );
+  return normalizeList(payload, "service_bindings") as AuthorityListResponse<ContextServiceBindingReadModel>;
+}
+
 export async function readPrincipalKeys(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
   const payload = await readJSON<RawAuthorityListResponse<PrincipalKeyReadModel>>(
     "keys",
@@ -369,6 +399,10 @@ export function grantPrincipalBadge(payload: PrincipalBadgeGrantMutationPayload,
 
 export function revokePrincipalBadge(payload: PrincipalBadgeGrantMutationPayload, signing?: AuthorityMutationSigningOptions) {
   return mutateJSON("principal_badge.revoke", payload, signing);
+}
+
+export function provisionContextService(payload: ProvisionContextServicePayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("context_service.provision", payload, signing);
 }
 
 export function registerPrincipalKey(payload: PrincipalKeyMutationPayload) {

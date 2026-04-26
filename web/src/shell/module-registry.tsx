@@ -8,6 +8,7 @@ export type LookoutModuleId =
   | "contexts"
   | "badges"
   | "grants"
+  | "services"
   | "principals"
   | "keys"
   | "providers"
@@ -122,6 +123,19 @@ export const lookoutModules: LookoutModuleDefinition[] = [
     summary: "Explicit permissions granted to principals, including revoked state.",
     surfaceLabel: "Authority Surface",
     entryHint: "Placeholder now; becomes the grant inspection surface in this phase.",
+  },
+  {
+    id: "services",
+    name: "Services",
+    navLabel: "Services",
+    route: "/authority/services",
+    icon: "SV",
+    description: "Service definitions, context bindings, and permission lanes.",
+    status: "partial",
+    requiredCapabilities: ["services:read", "services:manage"],
+    summary: "Shared service bindings with context scope, service-held keys, and badge-scoped permission lane posture.",
+    surfaceLabel: "Service Surface",
+    entryHint: "Inspect service bindings and provision service principals without exposing private key material.",
   },
   {
     id: "principals",

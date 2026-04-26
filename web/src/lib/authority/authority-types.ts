@@ -68,10 +68,34 @@ export interface PrincipalBadgeGrantReadModel {
   principal_id: string;
   badge_id: string;
   context_id: string;
+  effective_context_id?: string;
+  inherited?: boolean;
+  scope_mode?: string;
   permission: string;
   granted_by_principal_id?: string;
   reason?: string;
   created_at?: string;
+  revoked_at?: string;
+}
+
+export interface ServiceDefinitionReadModel {
+  id: string;
+  service_key: string;
+  name: string;
+  description?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ContextServiceBindingReadModel {
+  id: string;
+  context_id: string;
+  service_id: string;
+  service_key?: string;
+  scope_mode: string;
+  status: string;
+  created_at?: string;
+  updated_at?: string;
   revoked_at?: string;
 }
 
@@ -110,6 +134,8 @@ export interface AuthorityOverviewReadModel {
   principals?: PrincipalReadModel[];
   badge_definitions?: BadgeDefinitionReadModel[];
   badge_grants?: PrincipalBadgeGrantReadModel[];
+  service_definitions?: ServiceDefinitionReadModel[];
+  service_bindings?: ContextServiceBindingReadModel[];
   principal_keys?: PrincipalKeyReadModel[];
   audit_events?: AuthorityAuditEventReadModel[];
   page: PageInfo;
@@ -134,6 +160,8 @@ export type AuthorityReadSurface =
   | "principals"
   | "badges"
   | "grants"
+  | "service_definitions"
+  | "service_bindings"
   | "keys"
   | "audit";
 
@@ -153,6 +181,7 @@ export type AuthorityMutationCommand =
   | "badge_definition.archive"
   | "principal_badge.grant"
   | "principal_badge.revoke"
+  | "context_service.provision"
   | "principal_key.register"
   | "principal_key.revoke"
   | "principal_key.rotate";
@@ -226,7 +255,25 @@ export interface PrincipalBadgeGrantMutationPayload {
   badge_id: string;
   context_id: string;
   permission: string;
+  scope_mode?: string;
   reason?: string;
+}
+
+export interface ProvisionContextServicePayload {
+  service_id?: string;
+  service_key: string;
+  name?: string;
+  description?: string;
+  binding_id?: string;
+  context_id?: string;
+  binding_scope_mode?: string;
+  principal_id?: string;
+  account_id?: string;
+  key_id: string;
+  algorithm?: string;
+  public_key: string;
+  registration_id?: string;
+  initial_grants?: PrincipalBadgeGrantMutationPayload[];
 }
 
 export interface PrincipalKeyMutationPayload {

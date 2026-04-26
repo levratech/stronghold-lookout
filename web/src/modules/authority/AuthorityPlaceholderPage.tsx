@@ -19,6 +19,7 @@ import {
   createIdentity,
   grantPrincipalBadge,
   linkAccountAuthMethod,
+  provisionContextService,
   readAccounts,
   readAccountAuthMethods,
   readAuthorityAuditEvents,
@@ -28,6 +29,8 @@ import {
   readIdentities,
   readPrincipalKeys,
   readPrincipals,
+  readServiceBindings,
+  readServiceDefinitions,
   registerPrincipalKey,
   revokeAccountAuthMethod,
   revokePrincipalBadge,
@@ -46,11 +49,13 @@ import type {
   AuthorityMutationResult,
   AuthorityLoadStatus,
   BadgeDefinitionReadModel,
+  ContextServiceBindingReadModel,
   ContextReadModel,
   IdentityReadModel,
   PrincipalBadgeGrantReadModel,
   PrincipalKeyReadModel,
   PrincipalReadModel,
+  ServiceDefinitionReadModel,
 } from "../../lib/authority/authority-types";
 import {
   commandAuthHeaderValue,
@@ -112,8 +117,13 @@ const surfaceNotes: Record<string, string[]> = {
   ],
   grants: [
     "Show explicit badge grants to principals.",
-    "Include permission and revoked state when the read model is available.",
-    "Keep grant/revoke controls out of scope for this phase.",
+    "Include direct/subtree scope, inherited posture, effective context, and revoked state when available.",
+    "Make account sibling identity leakage visually obvious instead of implying grants are account-wide.",
+  ],
+  services: [
+    "Show service definitions separately from context service bindings.",
+    "Provision service principals with service-held public keys only; never paste private key material.",
+    "Expose permission lane posture as badge-scoped, context-bound service visibility.",
   ],
   principals: [
     "Show principal types: human, node/service/app/agent, system, and ephemeral.",
@@ -157,6 +167,8 @@ type LiveReadState =
       badges: BadgeDefinitionReadModel[];
       principals: PrincipalReadModel[];
       grants: PrincipalBadgeGrantReadModel[];
+      serviceDefinitions: ServiceDefinitionReadModel[];
+      serviceBindings: ContextServiceBindingReadModel[];
       keys: PrincipalKeyReadModel[];
       auditEvents: AuthorityAuditEventReadModel[];
     }
@@ -170,6 +182,8 @@ type LiveReadState =
       badges: BadgeDefinitionReadModel[];
       principals: PrincipalReadModel[];
       grants: PrincipalBadgeGrantReadModel[];
+      serviceDefinitions: ServiceDefinitionReadModel[];
+      serviceBindings: ContextServiceBindingReadModel[];
       keys: PrincipalKeyReadModel[];
       auditEvents: AuthorityAuditEventReadModel[];
     };
@@ -239,6 +253,8 @@ function liveSurfaceLabel(moduleId: string) {
       return "Principal Lineage";
     case "grants":
       return "Badge Grants";
+    case "services":
+      return "Service Bindings";
     case "keys":
       return "Key Posture";
     case "audit":
@@ -249,11 +265,11 @@ function liveSurfaceLabel(moduleId: string) {
 }
 
 function isLiveReadSurface(moduleId: string) {
-  return ["accounts", "auth-methods", "identities", "contexts", "badges", "principals", "grants", "keys", "audit"].includes(moduleId);
+  return ["accounts", "auth-methods", "identities", "contexts", "badges", "principals", "grants", "services", "keys", "audit"].includes(moduleId);
 }
 
 function isMutationSurface(moduleId: string) {
-  return ["accounts", "auth-methods", "identities", "contexts", "principals", "badges", "grants", "keys"].includes(moduleId);
+  return ["accounts", "auth-methods", "identities", "contexts", "principals", "badges", "grants", "services", "keys"].includes(moduleId);
 }
 
 function isCommandSigningSurface(moduleId: string) {
@@ -335,6 +351,8 @@ export function AuthorityPlaceholderPage() {
     badges: [],
     principals: [],
     grants: [],
+    serviceDefinitions: [],
+    serviceBindings: [],
     keys: [],
     auditEvents: [],
   });
@@ -351,6 +369,8 @@ export function AuthorityPlaceholderPage() {
         badges: [],
         principals: [],
         grants: [],
+        serviceDefinitions: [],
+        serviceBindings: [],
         keys: [],
         auditEvents: [],
       });
@@ -370,6 +390,8 @@ export function AuthorityPlaceholderPage() {
       badges: [],
       principals: [],
       grants: [],
+      serviceDefinitions: [],
+      serviceBindings: [],
       keys: [],
       auditEvents: [],
     });
@@ -390,6 +412,8 @@ export function AuthorityPlaceholderPage() {
             badges: [],
             principals: [],
             grants: [],
+            serviceDefinitions: [],
+            serviceBindings: [],
             keys: [],
             auditEvents: [],
           });
@@ -413,6 +437,8 @@ export function AuthorityPlaceholderPage() {
             badges: [],
             principals: [],
             grants: [],
+            serviceDefinitions: [],
+            serviceBindings: [],
             keys: [],
             auditEvents: [],
           });
@@ -433,6 +459,8 @@ export function AuthorityPlaceholderPage() {
             badges: [],
             principals: [],
             grants: [],
+            serviceDefinitions: [],
+            serviceBindings: [],
             keys: [],
             auditEvents: [],
           });
@@ -453,6 +481,8 @@ export function AuthorityPlaceholderPage() {
             badges: [],
             principals: [],
             grants: [],
+            serviceDefinitions: [],
+            serviceBindings: [],
             keys: [],
             auditEvents: [],
           });
@@ -473,6 +503,8 @@ export function AuthorityPlaceholderPage() {
             badges: response.items,
             principals: [],
             grants: [],
+            serviceDefinitions: [],
+            serviceBindings: [],
             keys: [],
             auditEvents: [],
           });
@@ -493,6 +525,8 @@ export function AuthorityPlaceholderPage() {
             badges: [],
             principals: response.items,
             grants: [],
+            serviceDefinitions: [],
+            serviceBindings: [],
             keys: [],
             auditEvents: [],
           });
@@ -517,6 +551,35 @@ export function AuthorityPlaceholderPage() {
             badges: badges.items,
             principals: principals.items,
             grants: response.items,
+            serviceDefinitions: [],
+            serviceBindings: [],
+            keys: [],
+            auditEvents: [],
+          });
+          return;
+        }
+
+        if (module?.id === "services") {
+          const [definitions, bindings, principals, badges] = await Promise.all([
+            readServiceDefinitions(controller.signal, { limit: 100 }, authorityReadTransport),
+            readServiceBindings(controller.signal, { limit: 100 }, authorityReadTransport),
+            readPrincipals(controller.signal, { limit: 100 }, authorityReadTransport),
+            readBadgeDefinitions(controller.signal, { limit: 100 }, authorityReadTransport),
+          ]);
+          setReadState({
+            status: definitions.items.length || bindings.items.length ? "ready" : "empty",
+            detail: definitions.items.length || bindings.items.length
+              ? `Service definitions and context bindings loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
+              : "No service definitions or context service bindings were returned for this session scope.",
+            accounts: [],
+            authMethods: [],
+            contexts: [],
+            identities: [],
+            badges: badges.items,
+            principals: principals.items,
+            grants: [],
+            serviceDefinitions: definitions.items,
+            serviceBindings: bindings.items,
             keys: [],
             auditEvents: [],
           });
@@ -537,6 +600,8 @@ export function AuthorityPlaceholderPage() {
             badges: [],
             principals: [],
             grants: [],
+            serviceDefinitions: [],
+            serviceBindings: [],
             keys: [],
             auditEvents: response.items,
           });
@@ -559,6 +624,8 @@ export function AuthorityPlaceholderPage() {
           badges: [],
           principals: principals.items,
           grants: [],
+          serviceDefinitions: [],
+          serviceBindings: [],
           keys: response.items,
           auditEvents: [],
         });
@@ -579,6 +646,8 @@ export function AuthorityPlaceholderPage() {
           badges: [],
           principals: [],
           grants: [],
+          serviceDefinitions: [],
+          serviceBindings: [],
           keys: [],
           auditEvents: [],
         });
@@ -776,6 +845,11 @@ export function AuthorityPlaceholderPage() {
               <PrincipalList principals={readState.principals} />
             ) : module.id === "grants" ? (
               <GrantList grants={readState.grants} />
+            ) : module.id === "services" ? (
+              <ServiceBindingList
+                definitions={readState.serviceDefinitions}
+                bindings={readState.serviceBindings}
+              />
             ) : module.id === "audit" ? (
               <AuditList events={readState.auditEvents} />
             ) : (
@@ -911,7 +985,7 @@ export function AuthorityPlaceholderPage() {
         >
           <div className="empty-state">
             Lookout can inspect audit evidence and submit controlled account, auth-method, identity, context,
-            badge, grant, and key mutations. Browser transport activation, key recovery, and broader
+            badge, grant, service, and key mutations. Browser transport activation, key recovery, and broader
             mutation auditing still need their own work orders.
           </div>
         </Panel>
@@ -1023,6 +1097,8 @@ function AuthorityMutationPanel({
           <BadgeMutationFields badges={readState.badges} defaultContextId={snapshotContextId} />
         ) : moduleId === "grants" ? (
           <GrantMutationFields badges={readState.badges} principals={readState.principals} defaultContextId={snapshotContextId} />
+        ) : moduleId === "services" ? (
+          <ServiceProvisionFields badges={readState.badges} defaultContextId={snapshotContextId} />
         ) : moduleId === "keys" ? (
           <KeyMutationFields keys={readState.keys} principals={readState.principals} />
         ) : (
@@ -1794,8 +1870,114 @@ function GrantMutationFields({
         </select>
       </label>
       <label>
+        Scope Mode
+        <select name="scope_mode" defaultValue="direct">
+          <option value="direct">direct</option>
+          <option value="subtree">subtree</option>
+        </select>
+      </label>
+      <label>
         Reason
         <input name="reason" placeholder="Why is this authority being changed?" />
+      </label>
+    </div>
+  );
+}
+
+function ServiceProvisionFields({
+  badges,
+  defaultContextId,
+}: {
+  badges: BadgeDefinitionReadModel[];
+  defaultContextId: string;
+}) {
+  return (
+    <div className="authority-form__grid">
+      <label>
+        Service Key
+        <input name="service_key" required placeholder="files.v1, agent-runner.v1" />
+      </label>
+      <label>
+        Service Name
+        <input name="name" placeholder="Files" />
+      </label>
+      <label>
+        Context ID
+        <input name="context_id" defaultValue={defaultContextId} />
+      </label>
+      <label>
+        Binding Scope
+        <select name="binding_scope_mode" defaultValue="direct">
+          <option value="direct">direct</option>
+          <option value="subtree">subtree</option>
+        </select>
+      </label>
+      <label>
+        Principal ID (optional)
+        <input name="principal_id" placeholder="Generated if empty" />
+      </label>
+      <label>
+        Account ID (optional)
+        <input name="account_id" placeholder="Defaults from active session" />
+      </label>
+      <label>
+        Service ID (optional)
+        <input name="service_id" placeholder="Generated if empty" />
+      </label>
+      <label>
+        Binding ID (optional)
+        <input name="binding_id" placeholder="Generated if empty" />
+      </label>
+      <label>
+        Key ID
+        <input name="key_id" required placeholder="service-main-ed25519" />
+      </label>
+      <label>
+        Algorithm
+        <select name="algorithm" defaultValue="ed25519">
+          <option value="ed25519">ed25519</option>
+        </select>
+      </label>
+      <label>
+        Registration ID (optional)
+        <input name="registration_id" placeholder="Bootstrap/provenance id, not a private key" />
+      </label>
+      <label>
+        Initial Badge
+        <input name="initial_badge_id" list="service-badge-options" placeholder="Optional initial grant badge" />
+        <datalist id="service-badge-options">
+          {badges.map((badge) => (
+            <option value={badge.id} key={badge.id}>{badge.name}</option>
+          ))}
+        </datalist>
+      </label>
+      <label>
+        Initial Permission
+        <select name="initial_permission" defaultValue="">
+          <option value="">No initial grant</option>
+          {contextPermissionCatalog.map((permission) => (
+            <option value={permission} key={permission}>{permission}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Initial Grant Scope
+        <select name="initial_scope_mode" defaultValue="direct">
+          <option value="direct">direct</option>
+          <option value="subtree">subtree</option>
+        </select>
+      </label>
+      <label>
+        Initial Grant Reason
+        <input name="initial_reason" placeholder="Why should this service receive the badge?" />
+      </label>
+      <label className="authority-form__wide">
+        Description
+        <input name="description" placeholder="What does this service do in the context?" />
+      </label>
+      <label className="authority-form__wide">
+        Service Public Key
+        <textarea name="public_key" required placeholder="Paste rawurl-base64 Ed25519 public key material only. The service keeps its private key." />
       </label>
     </div>
   );
@@ -1926,12 +2108,46 @@ async function submitAuthorityMutation(
       badge_id: textValue(form, "badge_id"),
       context_id: textValue(form, "context_id"),
       permission: textValue(form, "permission"),
+      scope_mode: optionalTextValue(form, "scope_mode"),
       reason: optionalTextValue(form, "reason"),
     };
     const command = textValue(form, "grant_command") as AuthorityMutationCommand;
     return command === "principal_badge.revoke"
       ? revokePrincipalBadge(payload, signingFor(command, signingOptions))
       : grantPrincipalBadge(payload, signingFor("principal_badge.grant", signingOptions));
+  }
+  if (moduleId === "services") {
+    const badgeId = optionalTextValue(form, "initial_badge_id");
+    const permission = optionalTextValue(form, "initial_permission");
+    const servicePrincipalId = optionalTextValue(form, "principal_id") ?? "";
+    const contextId = optionalTextValue(form, "context_id") ?? "";
+    const initialGrant = badgeId && permission
+      ? [{
+          principal_id: servicePrincipalId,
+          badge_id: badgeId,
+          context_id: contextId,
+          permission,
+          scope_mode: optionalTextValue(form, "initial_scope_mode"),
+          reason: optionalTextValue(form, "initial_reason"),
+        }]
+      : undefined;
+    const command: AuthorityMutationCommand = "context_service.provision";
+    return provisionContextService({
+      service_id: optionalTextValue(form, "service_id"),
+      service_key: textValue(form, "service_key"),
+      name: optionalTextValue(form, "name"),
+      description: optionalTextValue(form, "description"),
+      binding_id: optionalTextValue(form, "binding_id"),
+      context_id: optionalTextValue(form, "context_id"),
+      binding_scope_mode: optionalTextValue(form, "binding_scope_mode"),
+      principal_id: optionalTextValue(form, "principal_id"),
+      account_id: optionalTextValue(form, "account_id"),
+      key_id: textValue(form, "key_id"),
+      algorithm: optionalTextValue(form, "algorithm"),
+      public_key: textValue(form, "public_key"),
+      registration_id: optionalTextValue(form, "registration_id"),
+      initial_grants: initialGrant,
+    }, signingFor(command, signingOptions));
   }
   if (moduleId === "keys") {
     const payload = {
@@ -2001,6 +2217,8 @@ function mutationTitle(moduleId: string) {
       return "Create, Update, Or Archive Badge";
     case "grants":
       return "Grant Or Revoke Badge Permission";
+    case "services":
+      return "Provision Context Service";
     case "keys":
       return "Register, Revoke, Or Rotate Principal Key";
     default:
@@ -2218,6 +2436,10 @@ function GrantList({ grants }: { grants: PrincipalBadgeGrantReadModel[] }) {
               badge:{grant.badge_id} · context:{grant.context_id} · permission:{grant.permission}
             </div>
             <div className="list-item__body">
+              scope:{grant.scope_mode ?? "direct"} · effective context:
+              {grant.effective_context_id ?? grant.context_id} · inherited:{grant.inherited ? "yes" : "no"}
+            </div>
+            <div className="list-item__body">
               granted by:{grant.granted_by_principal_id ?? "authority"} · reason:
               {grant.reason ?? "not recorded"}
             </div>
@@ -2229,6 +2451,68 @@ function GrantList({ grants }: { grants: PrincipalBadgeGrantReadModel[] }) {
           <StatusPill tone={grant.revoked_at ? "danger" : "success"} label={grant.revoked_at ? "revoked" : "active"} />
         </div>
       ))}
+    </div>
+  );
+}
+
+function ServiceBindingList({
+  definitions,
+  bindings,
+}: {
+  definitions: ServiceDefinitionReadModel[];
+  bindings: ContextServiceBindingReadModel[];
+}) {
+  if (!definitions.length && !bindings.length) {
+    return <div className="empty-state">No service definitions or context service bindings are visible yet.</div>;
+  }
+  const definitionsByID = new Map(definitions.map((definition) => [definition.id, definition]));
+
+  return (
+    <div className="list">
+      {bindings.map((binding) => {
+        const definition = definitionsByID.get(binding.service_id);
+        const lane = `permissions.${binding.context_id}.${binding.service_id}.<badge_id>.>`;
+        return (
+          <div className="list-item" key={binding.id}>
+            <div>
+              <div className="list-item__title">
+                {definition?.name ?? binding.service_key ?? binding.service_id}
+              </div>
+              <div className="list-item__body">
+                binding:{binding.id} · context:{binding.context_id} · service:{binding.service_id}
+              </div>
+              <div className="list-item__body">
+                key:{definition?.service_key ?? binding.service_key ?? "unknown"} · scope:{binding.scope_mode} · status:{binding.status}
+              </div>
+              <div className="list-item__body">
+                permission lane:{lane}
+              </div>
+              <div className="list-item__body">
+                updated:{binding.updated_at ?? binding.created_at ?? "unknown"} · revoked:
+                {binding.revoked_at ?? "no"}
+              </div>
+            </div>
+            <StatusPill
+              tone={binding.revoked_at || binding.status !== "active" ? "warning" : "success"}
+              label={binding.status || "unknown"}
+            />
+          </div>
+        );
+      })}
+      {definitions
+        .filter((definition) => !bindings.some((binding) => binding.service_id === definition.id))
+        .map((definition) => (
+          <div className="list-item" key={definition.id}>
+            <div>
+              <div className="list-item__title">{definition.name || definition.service_key}</div>
+              <div className="list-item__body">
+                service:{definition.id} · key:{definition.service_key}
+              </div>
+              <div className="list-item__body">{definition.description ?? "No active binding visible for this service definition."}</div>
+            </div>
+            <StatusPill tone="neutral" label="definition" />
+          </div>
+        ))}
     </div>
   );
 }
