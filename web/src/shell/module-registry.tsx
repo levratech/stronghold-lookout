@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 export type LookoutModuleId =
   | "dashboard"
   | "overview"
+  | "resource-interface"
   | "accounts"
   | "auth-methods"
   | "identities"
@@ -58,6 +59,18 @@ export const lookoutModules: LookoutModuleDefinition[] = [
     summary: "Confirms whether the cockpit is authenticated, connected, and structurally sound.",
     surfaceLabel: "Shell Surface",
     entryHint: "Default command deck for operators entering the estate.",
+  },
+  {
+    id: "resource-interface",
+    name: "Resource UI Contract",
+    navLabel: "Resource UI",
+    route: "/debug/resource-interface",
+    icon: "RI",
+    description: "Reusable List/Create/Detail/Edit/Lifecycle interface contract.",
+    status: "available",
+    summary: "Static contract sandbox for future resource manager screens.",
+    surfaceLabel: "Interface Doctrine",
+    entryHint: "Defines the product resource shell without depending on debug cockpit state.",
   },
   {
     id: "accounts",

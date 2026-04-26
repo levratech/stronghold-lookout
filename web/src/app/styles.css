@@ -704,6 +704,96 @@ button {
   background: rgba(240, 113, 120, 0.12);
 }
 
+.button--ghost {
+  border-color: rgba(130, 161, 184, 0.14);
+  background: transparent;
+}
+
+.resource-interface {
+  display: grid;
+  gap: 24px;
+}
+
+.resource-interface__grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.86fr) minmax(320px, 1fr);
+  gap: 18px;
+}
+
+.resource-list {
+  display: grid;
+  gap: 10px;
+}
+
+.resource-list__row {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(130, 161, 184, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  text-align: left;
+}
+
+.resource-list__row:hover {
+  border-color: rgba(109, 198, 182, 0.28);
+  background: rgba(109, 198, 182, 0.08);
+}
+
+.resource-list__row--active {
+  border-color: rgba(109, 198, 182, 0.4);
+  background:
+    linear-gradient(90deg, rgba(109, 198, 182, 0.16), transparent 75%),
+    rgba(109, 198, 182, 0.08);
+}
+
+.resource-list__main {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.resource-list__title {
+  color: var(--text-strong);
+  font-weight: 620;
+}
+
+.resource-list__subtitle,
+.resource-list__id {
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.resource-list__id {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+  word-break: break-word;
+}
+
+.resource-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.resource-raw {
+  margin: 0;
+  max-height: 18rem;
+  overflow: auto;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(130, 161, 184, 0.12);
+  background: rgba(4, 9, 13, 0.62);
+  color: #c7d8e6;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
 .authority-form {
   display: grid;
   gap: 14px;
@@ -849,7 +939,8 @@ code {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .authority-form__grid {
+  .authority-form__grid,
+  .resource-interface__grid {
     grid-template-columns: 1fr;
   }
 }
@@ -884,7 +975,8 @@ code {
 
   .grid--metrics,
   .grid--panels,
-  .kv-grid {
+  .kv-grid,
+  .resource-interface__grid {
     grid-template-columns: 1fr;
   }
 }

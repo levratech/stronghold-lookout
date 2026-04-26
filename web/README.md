@@ -10,6 +10,7 @@ This is a UI-only browser cockpit for the Stronghold estate. It is built around:
 - same-origin NATS WebSocket transport under `/_/nats`
 - a shell-first layout with static module registration
 - first module surfaces for Overview, Sentry, and Aegis
+- a resource-interface contract route at `/debug/resource-interface` for future List/Create/Detail/Edit/Lifecycle manager screens
 
 The app does not use SSR. It builds to static assets and expects the serving layer to mount them at `/`.
 
