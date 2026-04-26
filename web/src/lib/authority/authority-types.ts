@@ -28,7 +28,10 @@ export interface AccountAuthMethodReadModel {
 export interface ContextReadModel {
   id: string;
   parent_id?: string;
+  parent_name?: string;
   name: string;
+  depth?: number;
+  child_count?: number;
 }
 
 export interface PrincipalReadModel {

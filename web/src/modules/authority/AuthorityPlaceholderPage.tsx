@@ -468,19 +468,24 @@ export function AuthorityPlaceholderPage() {
         }
 
         if (module?.id === "contexts") {
-          const response = await readContexts(controller.signal, { limit: 100 }, authorityReadTransport);
+          const [contexts, identities, badges, grants] = await Promise.all([
+            readContexts(controller.signal, { limit: 100 }, authorityReadTransport),
+            readIdentities(controller.signal, { limit: 100 }, authorityReadTransport),
+            readBadgeDefinitions(controller.signal, { limit: 100 }, authorityReadTransport),
+            readBadgeGrants(controller.signal, { limit: 100 }, authorityReadTransport),
+          ]);
           setReadState({
-            status: response.items.length ? "ready" : "empty",
-            detail: response.items.length
+            status: contexts.items.length ? "ready" : "empty",
+            detail: contexts.items.length
               ? `Contexts loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
               : "No contexts were returned for this session scope.",
             accounts: [],
             authMethods: [],
-            contexts: response.items,
-            identities: [],
-            badges: [],
+            contexts: contexts.items,
+            identities: identities.items,
+            badges: badges.items,
             principals: [],
-            grants: [],
+            grants: grants.items,
             serviceDefinitions: [],
             serviceBindings: [],
             keys: [],
@@ -838,7 +843,12 @@ export function AuthorityPlaceholderPage() {
             ) : module.id === "identities" ? (
               <IdentityList identities={readState.identities} />
             ) : module.id === "contexts" ? (
-              <ContextList contexts={readState.contexts} />
+              <ContextManagerReadSurface
+                contexts={readState.contexts}
+                identities={readState.identities}
+                badges={readState.badges}
+                grants={readState.grants}
+              />
             ) : module.id === "badges" ? (
               <BadgeList badges={readState.badges} />
             ) : module.id === "principals" ? (
@@ -2582,19 +2592,59 @@ function AuditList({ events }: { events: AuthorityAuditEventReadModel[] }) {
   );
 }
 
-function ContextList({ contexts }: { contexts: ContextReadModel[] }) {
+function ContextManagerReadSurface({
+  contexts,
+  identities,
+  badges,
+  grants,
+}: {
+  contexts: ContextReadModel[];
+  identities: IdentityReadModel[];
+  badges: BadgeDefinitionReadModel[];
+  grants: PrincipalBadgeGrantReadModel[];
+}) {
   if (!contexts.length) {
     return <div className="empty-state">No context records are visible yet.</div>;
   }
 
+  const sortedContexts = [...contexts].sort((left, right) => {
+    const depthDelta = (left.depth ?? 0) - (right.depth ?? 0);
+    if (depthDelta !== 0) {
+      return depthDelta;
+    }
+    return (left.name || left.id).localeCompare(right.name || right.id);
+  });
+  const identitiesByContext = countBy(identities, (identity) => identity.context_id);
+  const badgesByContext = countBy(badges, (badge) => badge.context_id);
+  const directGrantsByContext = countBy(
+    grants.filter((grant) => !grant.inherited && !grant.revoked_at),
+    (grant) => grant.context_id,
+  );
+  const inheritedGrantsByContext = countBy(
+    grants.filter((grant) => grant.inherited && !grant.revoked_at),
+    (grant) => grant.effective_context_id ?? grant.context_id,
+  );
+
   return (
     <div className="list">
-      {contexts.map((context) => (
+      {sortedContexts.map((context) => (
         <div className="list-item" key={context.id}>
           <div>
-            <div className="list-item__title">{context.name || context.id}</div>
+            <div className="list-item__title">
+              <span style={{ marginLeft: `${Math.min(context.depth ?? 0, 6) * 16}px` }}>
+                {context.name || context.id}
+              </span>
+            </div>
             <div className="list-item__body">
-              context:{context.id} · parent:{context.parent_id ?? "root"}
+              context:{context.id} · parent:{context.parent_name ?? context.parent_id ?? "root"}
+            </div>
+            <div className="list-item__body">
+              depth:{context.depth ?? 0} · children:{context.child_count ?? 0} · identities:
+              {identitiesByContext.get(context.id) ?? 0} · badges:{badgesByContext.get(context.id) ?? 0}
+            </div>
+            <div className="list-item__body">
+              direct grants:{directGrantsByContext.get(context.id) ?? 0} · inherited grants:
+              {inheritedGrantsByContext.get(context.id) ?? 0}
             </div>
           </div>
           <StatusPill tone={context.parent_id ? "neutral" : "success"} label={context.parent_id ? "child" : "root"} />
@@ -2602,6 +2652,18 @@ function ContextList({ contexts }: { contexts: ContextReadModel[] }) {
       ))}
     </div>
   );
+}
+
+function countBy<T>(values: T[], keyFor: (value: T) => string | undefined) {
+  const counts = new Map<string, number>();
+  values.forEach((value) => {
+    const key = keyFor(value);
+    if (!key) {
+      return;
+    }
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  });
+  return counts;
 }
 
 function BadgeList({ badges }: { badges: BadgeDefinitionReadModel[] }) {
