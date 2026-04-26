@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { lookoutEnvironment } from "../env";
 import { lookoutModules } from "./module-registry";
 import { useSession } from "../lib/session/SessionProvider";
@@ -41,8 +41,14 @@ function natsTone(status: string) {
 export function ShellLayout() {
   const { snapshot, login, logout, refresh } = useSession();
   const nats = useNats();
+  const location = useLocation();
   const activePrincipal = snapshot.activePrincipal;
   const root = snapshot.root;
+  const currentModule =
+    lookoutModules
+      .filter((module) => module.route !== "/" && location.pathname.startsWith(module.route))
+      .sort((a, b) => b.route.length - a.route.length)[0] ??
+    lookoutModules.find((module) => module.route === "/");
 
   const operatorSummary =
     activePrincipal?.email ??
@@ -53,6 +59,12 @@ export function ShellLayout() {
   const badgeSummary = activePrincipal?.badgeIds.length
     ? `${activePrincipal.badgeIds.length} badge(s)`
     : "No badge payload";
+  const operatorInitials = operatorSummary
+    .split(/[^a-zA-Z0-9]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "LO";
 
   return (
     <div className="lookout-shell">
@@ -68,53 +80,60 @@ export function ShellLayout() {
           </div>
         </div>
 
-        <div className="topbar__meta">
-          <div className="meta-card">
-            <div className="meta-card__row">
-              <span className="meta-card__label">Session</span>
-              <StatusPill tone={sessionTone(snapshot.status)} label={snapshot.status} />
-            </div>
-            <div className="meta-card__value">{operatorSummary}</div>
-            <div className="meta-card__label">
-              {root?.principalId && activePrincipal?.principalId && root.principalId !== activePrincipal.principalId
-                ? `Root ${root.principalId} -> active ${activePrincipal.principalId}`
-                : badgeSummary}
-            </div>
+        <div className="topbar__actions">
+          <div className="topbar__current">
+            <span className="topbar__current-label">{currentModule?.surfaceLabel ?? "Surface"}</span>
+            <span className="topbar__current-name">{currentModule?.name ?? "Lookout"}</span>
           </div>
 
-          <div className="meta-card">
-            <div className="meta-card__row">
-              <span className="meta-card__label">NATS Rail</span>
-              <StatusPill tone={natsTone(nats.state)} label={nats.state} />
-            </div>
-            <div className="meta-card__value">{nats.connectedServer ?? lookoutEnvironment.natsPath}</div>
-            <div className="meta-card__label">{nats.detail}</div>
-          </div>
+          <details className="operator-menu">
+            <summary className="operator-menu__trigger" aria-label="Session and connection menu">
+              <span className="operator-menu__avatar">{operatorInitials}</span>
+              <span className={`operator-menu__rail operator-menu__rail--${natsTone(nats.state)}`} />
+            </summary>
+            <div className="operator-menu__panel">
+              <div className="operator-menu__section">
+                <div className="operator-menu__row">
+                  <span>Session</span>
+                  <StatusPill tone={sessionTone(snapshot.status)} label={snapshot.status} />
+                </div>
+                <div className="operator-menu__primary">{operatorSummary}</div>
+                <div className="operator-menu__muted">
+                  {root?.principalId && activePrincipal?.principalId && root.principalId !== activePrincipal.principalId
+                    ? `Root ${root.principalId} -> active ${activePrincipal.principalId}`
+                    : badgeSummary}
+                </div>
+              </div>
 
-          <div className="meta-card">
-            <div className="meta-card__row">
-              <span className="meta-card__label">Controls</span>
-              <span className="meta-card__label">Same origin</span>
+              <div className="operator-menu__section">
+                <div className="operator-menu__row">
+                  <span>NATS rail</span>
+                  <StatusPill tone={natsTone(nats.state)} label={nats.state} />
+                </div>
+                <div className="operator-menu__primary">{nats.connectedServer ?? lookoutEnvironment.natsPath}</div>
+                <div className="operator-menu__muted">{nats.detail}</div>
+              </div>
+
+              <div className="operator-menu__actions">
+                <button className="button" onClick={refresh}>
+                  Refresh
+                </button>
+                <button className="button button--secondary" onClick={login}>
+                  Login
+                </button>
+                <button className="button button--danger" onClick={logout}>
+                  Logout
+                </button>
+              </div>
             </div>
-            <div className="button-row">
-              <button className="button" onClick={refresh}>
-                Refresh
-              </button>
-              <button className="button button--secondary" onClick={login}>
-                Login
-              </button>
-              <button className="button button--danger" onClick={logout}>
-                Logout
-              </button>
-            </div>
-          </div>
+          </details>
         </div>
       </header>
 
       <aside className="sidebar">
         <div className="sidebar__inner">
           <section className="sidebar__section">
-            <h2 className="sidebar__heading">Shell Modules</h2>
+            <h2 className="sidebar__heading">Navigation</h2>
             <nav className="sidebar__nav" aria-label="Primary">
               {lookoutModules.map((module) => (
                 <NavLink
@@ -128,30 +147,10 @@ export function ShellLayout() {
                   <div className="nav-link__icon">{module.icon}</div>
                   <div className="nav-link__text">
                     <div className="nav-link__title">{module.navLabel}</div>
-                    <div className="nav-link__description">{module.description}</div>
                   </div>
-                  <div className="nav-link__state">{module.status}</div>
                 </NavLink>
               ))}
             </nav>
-          </section>
-
-          <section className="sidebar__section">
-            <h2 className="sidebar__heading">Estate Rails</h2>
-            <div className="stack">
-              <div className="rail-card">
-                <div className="rail-card__title">Auth</div>
-                <div className="rail-card__note">
-                  Same-origin flow under <code>{lookoutEnvironment.authBasePath}</code>
-                </div>
-              </div>
-              <div className="rail-card">
-                <div className="rail-card__title">Transport</div>
-                <div className="rail-card__note">
-                  Browser NATS over <code>{lookoutEnvironment.natsPath}</code>
-                </div>
-              </div>
-            </div>
           </section>
         </div>
       </aside>

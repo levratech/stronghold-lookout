@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { ShellLayout } from "../shell/ShellLayout";
+import { DashboardPage } from "../modules/dashboard/DashboardPage";
 import { OverviewPage } from "../modules/overview/OverviewPage";
 import { SentryPage } from "../modules/sentry/SentryPage";
 import { AegisPage } from "../modules/aegis/AegisPage";
@@ -13,7 +14,8 @@ export function App() {
       <NatsProvider>
         <Routes>
           <Route path="/" element={<ShellLayout />}>
-            <Route index element={<OverviewPage />} />
+            <Route index element={<DashboardPage />} />
+            <Route path="debug/overview" element={<OverviewPage />} />
             <Route path="sentry" element={<SentryPage />} />
             <Route path="aegis" element={<AegisPage />} />
             <Route path="authority/:surface" element={<AuthorityPlaceholderPage />} />

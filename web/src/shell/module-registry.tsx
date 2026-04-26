@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 export type LookoutModuleId =
+  | "dashboard"
   | "overview"
   | "accounts"
   | "auth-methods"
@@ -35,10 +36,22 @@ export interface LookoutModuleDefinition {
 
 export const lookoutModules: LookoutModuleDefinition[] = [
   {
-    id: "overview",
-    name: "Overview",
-    navLabel: "Overview",
+    id: "dashboard",
+    name: "Dashboard",
+    navLabel: "Dashboard",
     route: "/",
+    icon: "DB",
+    description: "Primary product landing surface.",
+    status: "available",
+    summary: "Reserved dashboard canvas for the future product experience.",
+    surfaceLabel: "Home",
+    entryHint: "Intentionally blank until the dashboard plan is ready.",
+  },
+  {
+    id: "overview",
+    name: "Debug Cockpit",
+    navLabel: "Debug Cockpit",
+    route: "/debug/overview",
     icon: "OV",
     description: "Estate posture, session state, and control-rail visibility.",
     status: "available",
