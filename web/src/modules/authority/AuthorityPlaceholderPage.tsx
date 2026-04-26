@@ -1717,6 +1717,14 @@ function IdentityMutationFields({
         </select>
       </label>
       <label>
+        Subject Type
+        <select name="subject_type" defaultValue="person">
+          <option value="person">person</option>
+          <option value="agent">agent</option>
+          <option value="service">service</option>
+        </select>
+      </label>
+      <label>
         Person Email
         <input name="email" type="email" placeholder="Required for create / invite person" />
       </label>
@@ -1734,6 +1742,25 @@ function IdentityMutationFields({
           <option value="true">allow login setup</option>
           <option value="false">no interactive login</option>
         </select>
+      </label>
+      <label>
+        Token Key Required
+        <select name="token_key_required" defaultValue="false">
+          <option value="false">no</option>
+          <option value="true">yes, register public key</option>
+        </select>
+      </label>
+      <label>
+        Key ID
+        <input name="key_id" placeholder="Required for agent/service bootstrap" />
+      </label>
+      <label className="authority-form__wide">
+        Public Key
+        <input name="public_key" placeholder="Ed25519 public key; Sentry never receives the private key" />
+      </label>
+      <label>
+        Service Key
+        <input name="service_key" placeholder="Required for service subjects" />
       </label>
       <label>
         Personal Context
@@ -2122,15 +2149,20 @@ async function submitAuthorityMutation(
   if (moduleId === "identities") {
     const command = textValue(form, "identity_command") as AuthorityMutationCommand;
     if (command === "subject.create") {
+      const subjectType = textValue(form, "subject_type") as "person" | "agent" | "service";
       return createSubject({
-        subject_type: "person",
+        subject_type: subjectType || "person",
         account_id: optionalTextValue(form, "account_id"),
         context_id: textValue(form, "context_id"),
         email: optionalTextValue(form, "email"),
         identity_id: optionalTextValue(form, "identity_id"),
         principal_id: optionalTextValue(form, "principal_id"),
         interactive_login_allowed: booleanValue(form, "interactive_login_allowed", true),
+        token_key_required: booleanValue(form, "token_key_required", subjectType !== "person"),
         personal_context_requested: booleanValue(form, "personal_context_requested", false),
+        service_key: optionalTextValue(form, "service_key"),
+        key_id: optionalTextValue(form, "key_id"),
+        public_key: optionalTextValue(form, "public_key"),
       }, signingFor(command, signingOptions));
     }
     return createIdentity({

@@ -245,6 +245,8 @@ export interface SubjectCreationPayload {
   personal_context_requested?: boolean;
   service_key?: string;
   key_id?: string;
+  algorithm?: string;
+  public_key?: string;
   dry_run?: boolean;
 }
 
