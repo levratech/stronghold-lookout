@@ -879,7 +879,13 @@ export function AuthorityPlaceholderPage() {
             ) : module.id === "principals" ? (
               <PrincipalList principals={readState.principals} />
             ) : module.id === "grants" ? (
-              <GrantList grants={readState.grants} />
+              <GrantList
+                state={{ status: readState.status, detail: readState.detail }}
+                grants={readState.grants}
+                badges={readState.badges}
+                principals={readState.principals}
+                identities={readState.identities}
+              />
             ) : module.id === "services" ? (
               <ServiceBindingList
                 definitions={readState.serviceDefinitions}
@@ -2557,37 +2563,146 @@ function PrincipalList({ principals }: { principals: PrincipalReadModel[] }) {
   );
 }
 
-function GrantList({ grants }: { grants: PrincipalBadgeGrantReadModel[] }) {
-  if (!grants.length) {
-    return <div className="empty-state">No badge grants are visible yet.</div>;
-  }
+function GrantList({
+  state,
+  grants,
+  badges,
+  principals,
+  identities,
+}: {
+  state: ResourceInterfaceState;
+  grants: PrincipalBadgeGrantReadModel[];
+  badges: BadgeDefinitionReadModel[];
+  principals: PrincipalReadModel[];
+  identities: IdentityReadModel[];
+}) {
+  const badgesById = new Map(badges.map((badge) => [badge.id, badge]));
+  const principalsById = new Map(principals.map((principal) => [principal.id, principal]));
+  const identitiesByPrincipalId = new Map(identities.map((identity) => [identity.principal_id, identity]));
+  const records: ResourceRecordSummary[] = grants.map((grant) => {
+    const badge = badgesById.get(grant.badge_id);
+    const principal = principalsById.get(grant.principal_id);
+    const identity = identitiesByPrincipalId.get(grant.principal_id);
+    const revoked = Boolean(grant.revoked_at);
+    return {
+      id: grant.id,
+      title: badge?.name ?? grant.badge_id,
+      subtitle: `principal:${grant.principal_id} · context:${grant.effective_context_id ?? grant.context_id}`,
+      status: revoked ? "revoked" : grant.inherited ? "inherited" : "active",
+      statusTone: revoked ? "danger" : grant.inherited ? "warning" : "success",
+      tags: [
+        `scope:${grant.scope_mode ?? "direct"}`,
+        `permission:${grant.permission}`,
+        grant.inherited ? "inherited" : "direct",
+      ],
+      fields: [
+        { label: "Badge", value: badge?.name ?? grant.badge_id },
+        { label: "Badge ID", value: grant.badge_id },
+        { label: "Principal", value: grant.principal_id },
+        { label: "Identity", value: identity?.id ?? "not resolved" },
+        { label: "Principal Type", value: principal?.principal_type ?? "unknown" },
+        { label: "Context", value: grant.context_id },
+        { label: "Effective Context", value: grant.effective_context_id ?? grant.context_id },
+        { label: "Scope", value: grant.scope_mode ?? "direct" },
+        { label: "Permission", value: grant.permission },
+        { label: "Reason", value: grant.reason ?? "not recorded" },
+        { label: "Revoked", value: grant.revoked_at ?? "no" },
+      ],
+      relationships: [
+        {
+          label: "Identity-bound target",
+          value: identity?.id ?? grant.principal_id,
+          detail: "Grants attach to the paired principal for one identity; they do not fan out to account sibling identities.",
+          tone: identity ? "success" : "warning",
+        },
+        {
+          label: "Badge definition",
+          value: badge?.name ?? grant.badge_id,
+          detail: "The badge defines the label being granted inside its context.",
+          tone: badge ? "success" : "warning",
+        },
+        {
+          label: "Scope mode",
+          value: grant.scope_mode ?? "direct",
+          detail: grant.inherited
+            ? "This grant is inherited into the effective context during read/evaluation."
+            : "This grant applies directly at its recorded context.",
+          tone: grant.inherited ? "warning" : "neutral",
+        },
+      ],
+      lifecycleActions: [
+        {
+          id: "revoke",
+          label: revoked ? "Revoked" : "Revoke",
+          kind: "revoke",
+          disabled: revoked,
+          confirmationLabel: "revoke badge grant",
+          description: "Grant revocation stays in the controlled mutation panel until this resource action is wired.",
+        },
+      ],
+      raw: grant,
+    };
+  });
+  const columns: ResourceListColumn[] = [
+    {
+      id: "badge",
+      label: "Badge",
+      render: (record) => record.fields?.find((field) => field.label === "Badge")?.value ?? record.title,
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Badge")?.value ?? record.title),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Badge")?.value ?? record.title),
+    },
+    {
+      id: "principal",
+      label: "Principal",
+      render: (record) => <span className="resource-list__id">{record.fields?.find((field) => field.label === "Principal")?.value}</span>,
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Principal")?.value ?? ""),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Principal")?.value ?? ""),
+    },
+    {
+      id: "scope",
+      label: "Scope",
+      render: (record) => record.fields?.find((field) => field.label === "Scope")?.value ?? "direct",
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Scope")?.value ?? ""),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Scope")?.value ?? ""),
+    },
+    {
+      id: "status",
+      label: "Status",
+      render: (record) => (
+        <StatusPill tone={record.statusTone ?? "neutral"} label={record.status ?? "unknown"} />
+      ),
+      sortValue: (record) => record.status ?? "",
+      searchValue: (record) => record.status ?? "",
+    },
+    {
+      id: "id",
+      label: "Grant ID",
+      render: (record) => <span className="resource-list__id">{record.id}</span>,
+      sortValue: (record) => record.id,
+      searchValue: (record) => record.id,
+    },
+  ];
 
   return (
-    <div className="list">
-      {grants.map((grant) => (
-        <div className="list-item" key={grant.id}>
-          <div>
-            <div className="list-item__title">{grant.principal_id}</div>
-            <div className="list-item__body">
-              badge:{grant.badge_id} · context:{grant.context_id} · permission:{grant.permission}
-            </div>
-            <div className="list-item__body">
-              scope:{grant.scope_mode ?? "direct"} · effective context:
-              {grant.effective_context_id ?? grant.context_id} · inherited:{grant.inherited ? "yes" : "no"}
-            </div>
-            <div className="list-item__body">
-              granted by:{grant.granted_by_principal_id ?? "authority"} · reason:
-              {grant.reason ?? "not recorded"}
-            </div>
-            <div className="list-item__body">
-              grant:{grant.id} · created:{grant.created_at ?? "unknown"} · revoked:
-              {grant.revoked_at ?? "no"}
-            </div>
-          </div>
-          <StatusPill tone={grant.revoked_at ? "danger" : "success"} label={grant.revoked_at ? "revoked" : "active"} />
+    <ResourceInterfaceShell
+      eyebrow="Grants"
+      title="Grant Resource Interface"
+      summary="Identity-facing badge grants with direct/subtree scope posture and inherited evaluation visibility."
+      state={state}
+      records={records}
+      listColumns={columns}
+      showHeader={false}
+      createSlot={
+        <div className="empty-state">
+          Grant creation remains in the controlled mutation panel until the resource create form is converted.
         </div>
-      ))}
-    </div>
+      }
+      editSlot={
+        <div className="empty-state">
+          Grant revoke submissions remain in the controlled mutation panel for this pass.
+        </div>
+      }
+    />
   );
 }
 
