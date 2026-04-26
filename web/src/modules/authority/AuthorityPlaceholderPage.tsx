@@ -866,7 +866,11 @@ export function AuthorityPlaceholderPage() {
                 grants={readState.grants}
               />
             ) : module.id === "badges" ? (
-              <BadgeManagerSurface badges={readState.badges} contexts={readState.contexts} />
+              <BadgeManagerSurface
+                state={{ status: readState.status, detail: readState.detail }}
+                badges={readState.badges}
+                contexts={readState.contexts}
+              />
             ) : module.id === "principals" ? (
               <PrincipalList principals={readState.principals} />
             ) : module.id === "grants" ? (
@@ -2859,16 +2863,14 @@ function countBy<T>(values: T[], keyFor: (value: T) => string | undefined) {
 }
 
 function BadgeManagerSurface({
+  state,
   badges,
   contexts,
 }: {
+  state: ResourceInterfaceState;
   badges: BadgeDefinitionReadModel[];
   contexts: ContextReadModel[];
 }) {
-  if (!badges.length) {
-    return <div className="empty-state">No badge definitions are visible yet.</div>;
-  }
-
   const contextsById = new Map(contexts.map((context) => [context.id, context]));
   const sortedBadges = [...badges].sort((left, right) => {
     const leftContext = contextsById.get(left.context_id)?.name ?? left.context_id;
@@ -2879,24 +2881,106 @@ function BadgeManagerSurface({
     }
     return (left.name || left.id).localeCompare(right.name || right.id);
   });
+  const records: ResourceRecordSummary[] = sortedBadges.map((badge) => {
+    const context = contextsById.get(badge.context_id);
+    const archived = Boolean(badge.archived_at);
+    return {
+      id: badge.id,
+      title: badge.name || badge.id,
+      subtitle: `context:${context?.name ?? badge.context_id}`,
+      status: archived ? "archived" : "definition",
+      statusTone: archived ? "warning" : "neutral",
+      tags: [
+        "badge",
+        archived ? "archived" : "active",
+        `context:${context?.name ?? "unknown"}`,
+      ],
+      fields: [
+        { label: "Context", value: context?.name ?? "unknown" },
+        { label: "Context ID", value: badge.context_id },
+        { label: "Description", value: badge.description ?? "No description" },
+        { label: "Archived", value: badge.archived_at ?? "no" },
+      ],
+      relationships: [
+        {
+          label: "Bound context",
+          value: context?.name ?? badge.context_id,
+          detail: "Badge definitions are owned by the context they are created under.",
+          tone: context ? "success" : "warning",
+        },
+        {
+          label: "Grant posture",
+          value: "identity-facing grants",
+          detail: "Grant screens assign badge authority to identities through their paired principals.",
+          tone: "neutral",
+        },
+      ],
+      lifecycleActions: [
+        {
+          id: "archive",
+          label: archived ? "Archived" : "Archive",
+          kind: "archive",
+          disabled: archived,
+          confirmationLabel: "archive badge definition",
+          description: "Badge archive is handled by the controlled mutation panel until this resource action is wired.",
+        },
+      ],
+      raw: badge,
+    };
+  });
+  const columns: ResourceListColumn[] = [
+    {
+      id: "name",
+      label: "Name",
+      render: (record) => record.title,
+      sortValue: (record) => record.title,
+      searchValue: (record) => record.title,
+    },
+    {
+      id: "context",
+      label: "Context",
+      render: (record) => record.fields?.find((field) => field.label === "Context")?.value ?? "unknown",
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Context")?.value ?? ""),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Context")?.value ?? ""),
+    },
+    {
+      id: "status",
+      label: "Status",
+      render: (record) => (
+        <StatusPill tone={record.statusTone ?? "neutral"} label={record.status ?? "unknown"} />
+      ),
+      sortValue: (record) => record.status ?? "",
+      searchValue: (record) => record.status ?? "",
+    },
+    {
+      id: "id",
+      label: "ID",
+      render: (record) => <span className="resource-list__id">{record.id}</span>,
+      sortValue: (record) => record.id,
+      searchValue: (record) => record.id,
+    },
+  ];
 
   return (
-    <div className="list">
-      {sortedBadges.map((badge) => (
-        <div className="list-item" key={badge.id}>
-          <div>
-            <div className="list-item__title">{badge.name || badge.id}</div>
-            <div className="list-item__body">
-              context:{contextsById.get(badge.context_id)?.name ?? "unknown"} · context_id:{badge.context_id}
-            </div>
-            <div className="list-item__body">badge_id:{badge.id}</div>
-            <div className="list-item__body">{badge.description ?? "No description"}</div>
-            <div className="list-item__body">archived:{badge.archived_at ?? "no"}</div>
-          </div>
-          <StatusPill tone={badge.archived_at ? "warning" : "neutral"} label={badge.archived_at ? "archived" : "definition"} />
+    <ResourceInterfaceShell
+      eyebrow="Badges"
+      title="Badge Resource Interface"
+      summary="Context-scoped badge definitions with archive posture and grant-bound relationship hints."
+      state={state}
+      records={records}
+      listColumns={columns}
+      showHeader={false}
+      createSlot={
+        <div className="empty-state">
+          Badge create/update controls remain in the controlled mutation panel until the resource create form is converted.
         </div>
-      ))}
-    </div>
+      }
+      editSlot={
+        <div className="empty-state">
+          Badge edits and archive submissions remain in the controlled mutation panel for this pass.
+        </div>
+      }
+    />
   );
 }
 
