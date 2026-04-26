@@ -94,9 +94,9 @@ export const lookoutModules: LookoutModuleDefinition[] = [
     description: "Identity records, paired principals, and lineage.",
     status: "partial",
     requiredCapabilities: ["identities:read"],
-    summary: "Identity graph view across account, context, and principal relationships.",
+    summary: "Identity enrollment view across account, context, and paired principal relationships.",
     surfaceLabel: "Authority Surface",
-    entryHint: "Placeholder now; becomes the identity lineage read surface in this phase.",
+    entryHint: "Enroll account identities into specific contexts without implying account-wide authority.",
   },
   {
     id: "contexts",

@@ -446,15 +446,19 @@ export function AuthorityPlaceholderPage() {
         }
 
         if (module?.id === "identities") {
-          const response = await readIdentities(controller.signal, { limit: 100 }, authorityReadTransport);
+          const [response, accounts, contexts] = await Promise.all([
+            readIdentities(controller.signal, { limit: 100 }, authorityReadTransport),
+            readAccounts(controller.signal, { limit: 100 }, authorityReadTransport),
+            readContexts(controller.signal, { limit: 100 }, authorityReadTransport),
+          ]);
           setReadState({
             status: response.items.length ? "ready" : "empty",
             detail: response.items.length
               ? `Identities and paired principals loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
               : "No identities were returned for this session scope.",
-            accounts: [],
+            accounts: accounts.items,
             authMethods: [],
-            contexts: [],
+            contexts: contexts.items,
             identities: response.items,
             badges: [],
             principals: [],
@@ -844,7 +848,7 @@ export function AuthorityPlaceholderPage() {
             ) : module.id === "auth-methods" ? (
               <AuthMethodList methods={readState.authMethods} accounts={readState.accounts} />
             ) : module.id === "identities" ? (
-              <IdentityList identities={readState.identities} />
+              <IdentityList identities={readState.identities} accounts={readState.accounts} contexts={readState.contexts} />
             ) : module.id === "contexts" ? (
               <ContextManagerReadSurface
                 contexts={readState.contexts}
@@ -2786,10 +2790,21 @@ function AuthMethodList({
   );
 }
 
-function IdentityList({ identities }: { identities: IdentityReadModel[] }) {
+function IdentityList({
+  identities,
+  accounts,
+  contexts,
+}: {
+  identities: IdentityReadModel[];
+  accounts: AccountReadModel[];
+  contexts: ContextReadModel[];
+}) {
   if (!identities.length) {
     return <div className="empty-state">No identity records are visible yet.</div>;
   }
+
+  const accountsById = new Map(accounts.map((account) => [account.id, account]));
+  const contextsById = new Map(contexts.map((context) => [context.id, context]));
 
   return (
     <div className="list">
@@ -2798,8 +2813,12 @@ function IdentityList({ identities }: { identities: IdentityReadModel[] }) {
           <div>
             <div className="list-item__title">{identity.id}</div>
             <div className="list-item__body">
-              account:{identity.account_id} · context:{identity.context_id} · principal:
+              account:{accountsById.get(identity.account_id)?.email ?? identity.account_id} · context:
+              {contextsById.get(identity.context_id)?.name ?? identity.context_id} · principal:
               {identity.principal_id}
+            </div>
+            <div className="list-item__body">
+              account_id:{identity.account_id} · context_id:{identity.context_id}
             </div>
             <div className="list-item__body">
               principal type:{identity.principal.principal_type} · lineage:
