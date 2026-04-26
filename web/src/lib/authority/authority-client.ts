@@ -31,6 +31,7 @@ import type {
   ProvisionContextServicePayload,
   ContextServiceBindingReadModel,
   ServiceDefinitionReadModel,
+  SubjectCreationPayload,
 } from "./authority-types";
 
 const commandAuthHeader = "X-Stronghold-Command-Auth";
@@ -369,6 +370,10 @@ export function setAccountAuthMethodStatus(payload: AccountAuthMethodMutationPay
 
 export function createIdentity(payload: CreateIdentityPayload, signing?: AuthorityMutationSigningOptions) {
   return mutateJSON("identity.create", payload, signing);
+}
+
+export function createSubject(payload: SubjectCreationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("subject.create", payload, signing);
 }
 
 export function createDurablePrincipal(payload: CreateDurablePrincipalPayload, signing?: AuthorityMutationSigningOptions) {

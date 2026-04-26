@@ -17,6 +17,7 @@ import {
   createContext,
   createDurablePrincipal,
   createIdentity,
+  createSubject,
   grantPrincipalBadge,
   linkAccountAuthMethod,
   provisionContextService,
@@ -1691,9 +1692,16 @@ function IdentityMutationFields({
   return (
     <div className="authority-form__grid">
       <label>
+        Mode
+        <select name="identity_command" required defaultValue="identity.create">
+          <option value="identity.create">enroll existing account identity</option>
+          <option value="subject.create">create / invite person</option>
+        </select>
+      </label>
+      <label>
         Account
-        <select name="account_id" required defaultValue="">
-          <option value="" disabled>Select account</option>
+        <select name="account_id" defaultValue="">
+          <option value="">Create/select from email</option>
           {accounts.map((account) => (
             <option value={account.id} key={account.id}>{account.email || account.id}</option>
           ))}
@@ -1709,12 +1717,30 @@ function IdentityMutationFields({
         </select>
       </label>
       <label>
+        Person Email
+        <input name="email" type="email" placeholder="Required for create / invite person" />
+      </label>
+      <label>
         Identity ID (optional)
         <input name="identity_id" />
       </label>
       <label>
         Principal ID (optional)
         <input name="principal_id" />
+      </label>
+      <label>
+        Interactive Login
+        <select name="interactive_login_allowed" defaultValue="true">
+          <option value="true">allow login setup</option>
+          <option value="false">no interactive login</option>
+        </select>
+      </label>
+      <label>
+        Personal Context
+        <select name="personal_context_requested" defaultValue="false">
+          <option value="false">do not create</option>
+          <option value="true">create personal context</option>
+        </select>
       </label>
     </div>
   );
@@ -2094,7 +2120,19 @@ async function submitAuthorityMutation(
       : linkAccountAuthMethod(payload, signingFor("account_auth_method.link", signingOptions));
   }
   if (moduleId === "identities") {
-    const command: AuthorityMutationCommand = "identity.create";
+    const command = textValue(form, "identity_command") as AuthorityMutationCommand;
+    if (command === "subject.create") {
+      return createSubject({
+        subject_type: "person",
+        account_id: optionalTextValue(form, "account_id"),
+        context_id: textValue(form, "context_id"),
+        email: optionalTextValue(form, "email"),
+        identity_id: optionalTextValue(form, "identity_id"),
+        principal_id: optionalTextValue(form, "principal_id"),
+        interactive_login_allowed: booleanValue(form, "interactive_login_allowed", true),
+        personal_context_requested: booleanValue(form, "personal_context_requested", false),
+      }, signingFor(command, signingOptions));
+    }
     return createIdentity({
       account_id: textValue(form, "account_id"),
       context_id: textValue(form, "context_id"),
@@ -2225,6 +2263,17 @@ function optionalTextValue(form: FormData, name: string) {
   return value || undefined;
 }
 
+function booleanValue(form: FormData, name: string, fallback: boolean) {
+  const value = textValue(form, name);
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  return fallback;
+}
+
 function mutationTitle(moduleId: string) {
   switch (moduleId) {
     case "accounts":
@@ -2232,7 +2281,7 @@ function mutationTitle(moduleId: string) {
     case "auth-methods":
       return "Link, Disable, Or Revoke Account Auth Method";
     case "identities":
-      return "Create Identity In Context";
+      return "Enroll Identity Or Create Person";
     case "principals":
       return "Create Durable Principal";
     case "contexts":

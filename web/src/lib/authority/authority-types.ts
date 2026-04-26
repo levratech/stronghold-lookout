@@ -175,6 +175,7 @@ export type AuthorityMutationCommand =
   | "account_auth_method.link"
   | "account_auth_method.revoke"
   | "account_auth_method.status"
+  | "subject.create"
   | "identity.create"
   | "principal.create_durable"
   | "context.create"
@@ -230,6 +231,21 @@ export interface CreateIdentityPayload {
   account_id: string;
   context_id: string;
   principal_id?: string;
+}
+
+export interface SubjectCreationPayload {
+  subject_type: "person" | "agent" | "service";
+  context_id: string;
+  account_id?: string;
+  email?: string;
+  identity_id?: string;
+  principal_id?: string;
+  interactive_login_allowed?: boolean;
+  token_key_required?: boolean;
+  personal_context_requested?: boolean;
+  service_key?: string;
+  key_id?: string;
+  dry_run?: boolean;
 }
 
 export interface CreateDurablePrincipalPayload {
