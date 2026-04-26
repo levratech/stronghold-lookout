@@ -20,18 +20,16 @@ import (
 var session *lookout.Session
 
 func main() {
-	var err error
-	session, err = lookout.NewSession()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-	defer session.Close()
-
 	rootCmd := &cobra.Command{
 		Use:   "lookout",
 		Short: "Stronghold Lookout CLI Runtime",
 		Long:  "The Primary Interface for Autonomous Agents to manage the Stronghold estate.",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			if cmd.CommandPath() == "lookout resources contract" {
+				return nil
+			}
+			return ensureSession()
+		},
 		Run: func(cmd *cobra.Command, args []string) {
 			if len(args) == 0 {
 				runInteractiveREPL()
@@ -44,11 +42,86 @@ func main() {
 	rootCmd.AddCommand(seedCmd())
 	rootCmd.AddCommand(capturedCmd())
 	rootCmd.AddCommand(configCmd())
+	rootCmd.AddCommand(resourcesCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Execution failed. A standard error, really. (Error: %v)\n", err)
 		os.Exit(1)
 	}
+	if session != nil {
+		session.Close()
+	}
+}
+
+func ensureSession() error {
+	if session != nil {
+		return nil
+	}
+	nextSession, err := lookout.NewSession()
+	if err != nil {
+		return fmt.Errorf("NATS connection failed. Do try to keep the server running. (Error: %w)", err)
+	}
+	session = nextSession
+	return nil
+}
+
+func resourcesCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "resources",
+		Short: "Inspect Lookout resource-interface doctrine for agent parity",
+	}
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "contract",
+		Short: "Prints the standard resource interface contract as JSON",
+		Run: func(cmd *cobra.Command, args []string) {
+			contract := map[string]interface{}{
+				"surfaces": []string{
+					"contexts",
+					"badges",
+					"identities",
+					"grants",
+					"services",
+					"principals",
+					"keys",
+				},
+				"verbs": []string{
+					"list",
+					"get",
+					"create",
+					"update",
+					"archive",
+					"disable",
+					"revoke",
+					"smoke",
+				},
+				"list_contract": map[string]string{
+					"filter":  "client-side quick filter over loaded records first",
+					"sort":    "client-side sort over visible loaded columns first",
+					"columns": "caller-selectable visible columns first",
+					"search":  "backend/global search is a later Postgres search projection",
+				},
+				"lifecycle_contract": map[string]string{
+					"delete":  "physical delete is not a default resource action",
+					"archive": "soft lifecycle marker for records that should leave evidence",
+					"revoke":  "authority-removing lifecycle marker for grants and keys",
+				},
+				"boundaries": []string{
+					"Lookout is a client/operator surface only",
+					"Sentry/db-service remain authority and persistence boundaries",
+					"CLI parity should not bypass command-signing, audit, or scoped authority checks",
+				},
+			}
+			data, err := json.MarshalIndent(contract, "", "  ")
+			if err != nil {
+				fmt.Printf("Failed to encode resource contract. (Error: %v)\n", err)
+				return
+			}
+			fmt.Println(string(data))
+		},
+	})
+
+	return cmd
 }
 
 func loginCmd() *cobra.Command {

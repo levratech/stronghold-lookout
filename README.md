@@ -12,11 +12,11 @@ This repository will eventually house three distinct client surfaces, each disci
 
 | Client | Description | Status |
 |---|---|---|
-| **Interactive CLI** | A command-driven runtime for operators who prefer precision over pantomime. Built on [Cobra](https://github.com/spf13/cobra). | Forthcoming |
-| **Web Lookout** | A browser-based operator cockpit for same-origin auth, NATS transport, and estate visibility. Assets now live in `web/`. | Initial shell implemented |
+| **Interactive CLI** | A command-driven runtime and agent-facing operational window for Stronghold operator workflows. Built on [Cobra](https://github.com/spf13/cobra). | Active |
+| **Web Lookout** | A browser-based operator cockpit for same-origin auth, NATS transport, authority/resource management, and estate visibility. Assets live in `web/`. | Active |
 | **Electron Shell** | A desktop application for those who require their dashboards delivered natively. | Forthcoming |
 
-None of the above are implemented yet. The scaffolding you see here is the **Industrial Rail** — everything necessary to receive future features cleanly and without drama.
+The CLI and web cockpit are active, while the Electron shell remains future work. The scaffolding is still the **Industrial Rail**: future features should land cleanly, with evidence, and without drama.
 
 ---
 
@@ -85,6 +85,12 @@ The web cockpit is intentionally same-origin in design:
 - NATS over WebSocket is expected under `/_/nats`
 
 See [`web/README.md`](web/README.md) and [`web/IMPLEMENTATION_NOTES.md`](web/IMPLEMENTATION_NOTES.md) for the current web-shell details and backend gaps.
+
+The reusable resource interface doctrine is captured in [`web/RESOURCE_INTERFACE_EVIDENCE.md`](web/RESOURCE_INTERFACE_EVIDENCE.md). Agents can inspect the CLI parity contract with:
+
+```bash
+lookout resources contract
+```
 
 ---
 
