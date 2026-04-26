@@ -547,10 +547,11 @@ export function AuthorityPlaceholderPage() {
         }
 
         if (module?.id === "grants") {
-          const [response, badges, principals] = await Promise.all([
+          const [response, badges, principals, identities] = await Promise.all([
             readBadgeGrants(controller.signal, { limit: 100 }, authorityReadTransport),
             readBadgeDefinitions(controller.signal, { limit: 100 }, authorityReadTransport),
             readPrincipals(controller.signal, { limit: 100 }, authorityReadTransport),
+            readIdentities(controller.signal, { limit: 100 }, authorityReadTransport),
           ]);
           setReadState({
             status: response.items.length ? "ready" : "empty",
@@ -560,7 +561,7 @@ export function AuthorityPlaceholderPage() {
             accounts: [],
             authMethods: [],
             contexts: [],
-            identities: [],
+            identities: identities.items,
             badges: badges.items,
             principals: principals.items,
             grants: response.items,
@@ -1114,7 +1115,7 @@ function AuthorityMutationPanel({
         ) : moduleId === "badges" ? (
           <BadgeMutationFields badges={readState.badges} contexts={readState.contexts} defaultContextId={snapshotContextId} />
         ) : moduleId === "grants" ? (
-          <GrantMutationFields badges={readState.badges} principals={readState.principals} defaultContextId={snapshotContextId} />
+          <GrantMutationFields badges={readState.badges} identities={readState.identities} principals={readState.principals} defaultContextId={snapshotContextId} />
         ) : moduleId === "services" ? (
           <ServiceProvisionFields badges={readState.badges} defaultContextId={snapshotContextId} />
         ) : moduleId === "keys" ? (
@@ -1900,10 +1901,12 @@ function BadgeMutationFields({
 
 function GrantMutationFields({
   badges,
+  identities,
   principals,
   defaultContextId,
 }: {
   badges: BadgeDefinitionReadModel[];
+  identities: IdentityReadModel[];
   principals: PrincipalReadModel[];
   defaultContextId: string;
 }) {
@@ -1917,8 +1920,19 @@ function GrantMutationFields({
         </select>
       </label>
       <label>
-        Principal ID
-        <input name="principal_id" list="principal-options" required />
+        Identity
+        <select name="principal_id" required defaultValue="">
+          <option value="" disabled>Select identity</option>
+          {identities.map((identity) => (
+            <option value={identity.principal_id} key={identity.id}>
+              {identity.id} ({identity.principal.principal_type})
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Principal ID fallback
+        <input name="principal_id_fallback" list="principal-options" />
         <datalist id="principal-options">
           {principals.map((principal) => (
             <option value={principal.id} key={principal.id}>{principal.principal_type}</option>
@@ -2197,8 +2211,9 @@ async function submitAuthorityMutation(
       : createBadgeDefinition(payload, signingFor("badge_definition.create", signingOptions));
   }
   if (moduleId === "grants") {
+    const selectedPrincipalId = textValue(form, "principal_id") || textValue(form, "principal_id_fallback");
     const payload = {
-      principal_id: textValue(form, "principal_id"),
+      principal_id: selectedPrincipalId,
       badge_id: textValue(form, "badge_id"),
       context_id: textValue(form, "context_id"),
       permission: textValue(form, "permission"),
