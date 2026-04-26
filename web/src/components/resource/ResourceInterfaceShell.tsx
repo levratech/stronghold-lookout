@@ -37,6 +37,7 @@ export interface ResourceInterfaceShellProps {
   editSlot?: ReactNode;
   detailSlot?: ReactNode;
   lifecycleSlot?: ReactNode;
+  showHeader?: boolean;
   onLifecycleAction?: (
     record: ResourceRecordSummary,
     action: ResourceLifecycleAction,
@@ -56,6 +57,7 @@ export function ResourceInterfaceShell({
   editSlot,
   detailSlot,
   lifecycleSlot,
+  showHeader = true,
   onLifecycleAction,
 }: ResourceInterfaceShellProps) {
   const columns = useMemo(
@@ -103,14 +105,16 @@ export function ResourceInterfaceShell({
 
   return (
     <div className="resource-interface">
-      <header className="page__header">
-        <div className="page__title-block">
-          <div className="panel__eyebrow">{eyebrow}</div>
-          <h1 className="page__title">{title}</h1>
-          <p className="page__summary">{summary}</p>
-        </div>
-        <StatusPill tone={statusTone(state.status)} label={state.status} />
-      </header>
+      {showHeader ? (
+        <header className="page__header">
+          <div className="page__title-block">
+            <div className="panel__eyebrow">{eyebrow}</div>
+            <h1 className="page__title">{title}</h1>
+            <p className="page__summary">{summary}</p>
+          </div>
+          <StatusPill tone={statusTone(state.status)} label={state.status} />
+        </header>
+      ) : null}
 
       <section className="resource-interface__grid">
         <Panel

@@ -4,6 +4,7 @@ import { Navigate, useParams } from "react-router-dom";
 import { connect, credsAuthenticator, type NatsConnection } from "nats.ws";
 import { Panel } from "../../components/ui/Panel";
 import { StatusPill } from "../../components/ui/StatusPill";
+import { ResourceInterfaceShell } from "../../components/resource/ResourceInterfaceShell";
 import { useNats } from "../../lib/nats/NatsProvider";
 import { describeNatsError, type NatsPermissionProbeResult } from "../../lib/nats/nats-types";
 import { useSession } from "../../lib/session/SessionProvider";
@@ -58,6 +59,11 @@ import type {
   PrincipalReadModel,
   ServiceDefinitionReadModel,
 } from "../../lib/authority/authority-types";
+import type {
+  ResourceInterfaceState,
+  ResourceListColumn,
+  ResourceRecordSummary,
+} from "../../components/resource/resource-types";
 import {
   commandAuthHeaderValue,
   generateAndStoreBrowserCommandSigningKey,
@@ -853,6 +859,7 @@ export function AuthorityPlaceholderPage() {
               <IdentityList identities={readState.identities} accounts={readState.accounts} contexts={readState.contexts} />
             ) : module.id === "contexts" ? (
               <ContextManagerReadSurface
+                state={{ status: readState.status, detail: readState.detail }}
                 contexts={readState.contexts}
                 identities={readState.identities}
                 badges={readState.badges}
@@ -2703,20 +2710,18 @@ function AuditList({ events }: { events: AuthorityAuditEventReadModel[] }) {
 }
 
 function ContextManagerReadSurface({
+  state,
   contexts,
   identities,
   badges,
   grants,
 }: {
+  state: ResourceInterfaceState;
   contexts: ContextReadModel[];
   identities: IdentityReadModel[];
   badges: BadgeDefinitionReadModel[];
   grants: PrincipalBadgeGrantReadModel[];
 }) {
-  if (!contexts.length) {
-    return <div className="empty-state">No context records are visible yet.</div>;
-  }
-
   const sortedContexts = [...contexts].sort((left, right) => {
     const depthDelta = (left.depth ?? 0) - (right.depth ?? 0);
     if (depthDelta !== 0) {
@@ -2734,33 +2739,110 @@ function ContextManagerReadSurface({
     grants.filter((grant) => grant.inherited && !grant.revoked_at),
     (grant) => grant.effective_context_id ?? grant.context_id,
   );
+  const records: ResourceRecordSummary[] = sortedContexts.map((context) => {
+    const identityCount = identitiesByContext.get(context.id) ?? 0;
+    const badgeCount = badgesByContext.get(context.id) ?? 0;
+    const directGrantCount = directGrantsByContext.get(context.id) ?? 0;
+    const inheritedGrantCount = inheritedGrantsByContext.get(context.id) ?? 0;
+    const isRoot = !context.parent_id;
+    return {
+      id: context.id,
+      title: context.name || context.id,
+      subtitle: `parent:${context.parent_name ?? context.parent_id ?? "root"} · depth:${context.depth ?? 0}`,
+      status: isRoot ? "root" : "child",
+      statusTone: isRoot ? "success" : "neutral",
+      tags: [
+        `depth:${context.depth ?? 0}`,
+        `children:${context.child_count ?? 0}`,
+        `identities:${identityCount}`,
+        `badges:${badgeCount}`,
+      ],
+      fields: [
+        { label: "Parent", value: context.parent_name ?? context.parent_id ?? "root" },
+        { label: "Depth", value: context.depth ?? 0 },
+        { label: "Children", value: context.child_count ?? 0 },
+        { label: "Identities", value: identityCount },
+        { label: "Badges", value: badgeCount },
+        { label: "Direct Grants", value: directGrantCount },
+        { label: "Inherited Grants", value: inheritedGrantCount },
+      ],
+      relationships: [
+        {
+          label: "Parent context",
+          value: context.parent_name ?? context.parent_id ?? "root",
+          detail: context.parent_id
+            ? "This context inherits downward-scoped posture from ancestors during evaluation."
+            : "Root contexts are top-level authority boundaries for their tree.",
+          tone: isRoot ? "success" : "neutral",
+        },
+        {
+          label: "Grant evaluation",
+          value: `${directGrantCount} direct / ${inheritedGrantCount} inherited`,
+          detail: "Inherited grants are read/evaluation-time posture, not copied authority records.",
+          tone: inheritedGrantCount ? "warning" : "neutral",
+        },
+      ],
+      raw: context,
+    };
+  });
+  const columns: ResourceListColumn[] = [
+    {
+      id: "name",
+      label: "Name",
+      render: (record) => record.title,
+      sortValue: (record) => record.title,
+      searchValue: (record) => `${record.title} ${record.subtitle ?? ""}`,
+    },
+    {
+      id: "depth",
+      label: "Depth",
+      render: (record) => record.fields?.find((field) => field.label === "Depth")?.value ?? 0,
+      sortValue: (record) => Number(record.fields?.find((field) => field.label === "Depth")?.value ?? 0),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Depth")?.value ?? 0),
+    },
+    {
+      id: "parent",
+      label: "Parent",
+      render: (record) => record.fields?.find((field) => field.label === "Parent")?.value ?? "root",
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Parent")?.value ?? "root"),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Parent")?.value ?? "root"),
+    },
+    {
+      id: "counts",
+      label: "Counts",
+      render: (record) => record.tags?.join(" · ") ?? "none",
+      sortValue: (record) => record.tags?.join(" ") ?? "",
+      searchValue: (record) => record.tags?.join(" ") ?? "",
+    },
+    {
+      id: "id",
+      label: "ID",
+      render: (record) => <span className="resource-list__id">{record.id}</span>,
+      sortValue: (record) => record.id,
+      searchValue: (record) => record.id,
+    },
+  ];
 
   return (
-    <div className="list">
-      {sortedContexts.map((context) => (
-        <div className="list-item" key={context.id}>
-          <div>
-            <div className="list-item__title">
-              <span style={{ marginLeft: `${Math.min(context.depth ?? 0, 6) * 16}px` }}>
-                {context.name || context.id}
-              </span>
-            </div>
-            <div className="list-item__body">
-              context:{context.id} · parent:{context.parent_name ?? context.parent_id ?? "root"}
-            </div>
-            <div className="list-item__body">
-              depth:{context.depth ?? 0} · children:{context.child_count ?? 0} · identities:
-              {identitiesByContext.get(context.id) ?? 0} · badges:{badgesByContext.get(context.id) ?? 0}
-            </div>
-            <div className="list-item__body">
-              direct grants:{directGrantsByContext.get(context.id) ?? 0} · inherited grants:
-              {inheritedGrantsByContext.get(context.id) ?? 0}
-            </div>
-          </div>
-          <StatusPill tone={context.parent_id ? "neutral" : "success"} label={context.parent_id ? "child" : "root"} />
+    <ResourceInterfaceShell
+      eyebrow="Contexts"
+      title="Context Resource Interface"
+      summary="Context hierarchy, scoped authority boundaries, and read/evaluation-time inherited grant posture."
+      state={state}
+      records={records}
+      listColumns={columns}
+      showHeader={false}
+      createSlot={
+        <div className="empty-state">
+          Context create controls remain in the controlled mutation panel until the resource create form is converted.
         </div>
-      ))}
-    </div>
+      }
+      editSlot={
+        <div className="empty-state">
+          Context edit controls remain in the controlled mutation panel for this pass.
+        </div>
+      }
+    />
   );
 }
 
