@@ -877,7 +877,10 @@ export function AuthorityPlaceholderPage() {
                 contexts={readState.contexts}
               />
             ) : module.id === "principals" ? (
-              <PrincipalList principals={readState.principals} />
+              <PrincipalList
+                state={{ status: readState.status, detail: readState.detail }}
+                principals={readState.principals}
+              />
             ) : module.id === "grants" ? (
               <GrantList
                 state={{ status: readState.status, detail: readState.detail }}
@@ -888,13 +891,18 @@ export function AuthorityPlaceholderPage() {
               />
             ) : module.id === "services" ? (
               <ServiceBindingList
+                state={{ status: readState.status, detail: readState.detail }}
                 definitions={readState.serviceDefinitions}
                 bindings={readState.serviceBindings}
               />
             ) : module.id === "audit" ? (
               <AuditList events={readState.auditEvents} />
             ) : (
-              <KeyList keys={readState.keys} />
+              <KeyList
+                state={{ status: readState.status, detail: readState.detail }}
+                keys={readState.keys}
+                principals={readState.principals}
+              />
             )}
           </Panel>
         ) : null}
@@ -2533,33 +2541,105 @@ function stringArrayClaim(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
-function PrincipalList({ principals }: { principals: PrincipalReadModel[] }) {
-  if (!principals.length) {
-    return <div className="empty-state">No principal records are visible yet.</div>;
-  }
+function PrincipalList({
+  state,
+  principals,
+}: {
+  state: ResourceInterfaceState;
+  principals: PrincipalReadModel[];
+}) {
+  const records: ResourceRecordSummary[] = principals.map((principal) => {
+    const revoked = Boolean(principal.revoked_at);
+    const ephemeral = principal.is_ephemeral;
+    return {
+      id: principal.id,
+      title: principal.id,
+      subtitle: `type:${principal.principal_type} · context:${principal.context_id}`,
+      status: revoked ? "revoked" : ephemeral ? "ephemeral" : "durable",
+      statusTone: revoked ? "danger" : ephemeral ? "warning" : "success",
+      tags: [
+        principal.principal_type,
+        principal.account_id ? "account-bound" : "no-account",
+        ephemeral ? "ephemeral" : "durable",
+      ],
+      fields: [
+        { label: "Principal Type", value: principal.principal_type },
+        { label: "Context", value: principal.context_id ?? "none" },
+        { label: "Account", value: principal.account_id ?? "none" },
+        { label: "Minted By", value: principal.minted_by_principal_id ?? "authority" },
+        { label: "Authority Root", value: principal.authority_root_principal_id ?? "self" },
+        { label: "Revoked", value: principal.revoked_at ?? "no" },
+      ],
+      relationships: [
+        {
+          label: "Authority root",
+          value: principal.authority_root_principal_id ?? "self",
+          detail: "Ownership/provenance is displayed separately from granted authority.",
+          tone: "neutral",
+        },
+        {
+          label: "Agent/service posture",
+          value: principal.principal_type,
+          detail: "Durable service and agent principals are managed as distinct execution identities.",
+          tone: principal.principal_type === "agent" || principal.principal_type === "service" ? "success" : "neutral",
+        },
+      ],
+      raw: principal,
+    };
+  });
+  const columns: ResourceListColumn[] = [
+    {
+      id: "principal",
+      label: "Principal",
+      render: (record) => <span className="resource-list__id">{record.id}</span>,
+      sortValue: (record) => record.id,
+      searchValue: (record) => record.id,
+    },
+    {
+      id: "type",
+      label: "Type",
+      render: (record) => record.fields?.find((field) => field.label === "Principal Type")?.value ?? "unknown",
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Principal Type")?.value ?? ""),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Principal Type")?.value ?? ""),
+    },
+    {
+      id: "context",
+      label: "Context",
+      render: (record) => <span className="resource-list__id">{record.fields?.find((field) => field.label === "Context")?.value}</span>,
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Context")?.value ?? ""),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Context")?.value ?? ""),
+    },
+    {
+      id: "status",
+      label: "Status",
+      render: (record) => (
+        <StatusPill tone={record.statusTone ?? "neutral"} label={record.status ?? "unknown"} />
+      ),
+      sortValue: (record) => record.status ?? "",
+      searchValue: (record) => record.status ?? "",
+    },
+  ];
 
   return (
-    <div className="list">
-      {principals.map((principal) => (
-        <div className="list-item" key={principal.id}>
-          <div>
-            <div className="list-item__title">{principal.id}</div>
-            <div className="list-item__body">
-              type:{principal.principal_type} · context:{principal.context_id} · account:
-              {principal.account_id ?? "none"}
-            </div>
-            <div className="list-item__body">
-              minted by:{principal.minted_by_principal_id ?? "authority"} · authority root:
-              {principal.authority_root_principal_id ?? "self"}
-            </div>
-          </div>
-          <StatusPill
-            tone={principal.revoked_at ? "danger" : principal.is_ephemeral ? "warning" : "success"}
-            label={principal.revoked_at ? "revoked" : principal.is_ephemeral ? "ephemeral" : "durable"}
-          />
+    <ResourceInterfaceShell
+      eyebrow="Principals"
+      title="Principal Resource Interface"
+      summary="Human, service, agent, and ephemeral execution principals with provenance separated from permission grants."
+      state={state}
+      records={records}
+      listColumns={columns}
+      showHeader={false}
+      createSlot={
+        <div className="empty-state">
+          Durable principal creation remains in the controlled mutation panel until the resource create form is converted.
         </div>
-      ))}
-    </div>
+      }
+      editSlot={
+        <div className="empty-state">
+          Principal revoke/rotate posture is handled by Keys and controlled mutation work for this pass.
+        </div>
+      }
+    />
   );
 }
 
@@ -2707,93 +2787,250 @@ function GrantList({
 }
 
 function ServiceBindingList({
+  state,
   definitions,
   bindings,
 }: {
+  state: ResourceInterfaceState;
   definitions: ServiceDefinitionReadModel[];
   bindings: ContextServiceBindingReadModel[];
 }) {
-  if (!definitions.length && !bindings.length) {
-    return <div className="empty-state">No service definitions or context service bindings are visible yet.</div>;
-  }
   const definitionsByID = new Map(definitions.map((definition) => [definition.id, definition]));
+  const boundServiceIds = new Set(bindings.map((binding) => binding.service_id));
+  const bindingRecords: ResourceRecordSummary[] = bindings.map((binding) => {
+    const definition = definitionsByID.get(binding.service_id);
+    const lane = `permissions.${binding.context_id}.${binding.service_id}.<badge_id>.>`;
+    const inactive = Boolean(binding.revoked_at) || binding.status !== "active";
+    return {
+      id: binding.id,
+      title: definition?.name ?? binding.service_key ?? binding.service_id,
+      subtitle: `context:${binding.context_id} · service:${binding.service_id}`,
+      status: binding.status || "unknown",
+      statusTone: inactive ? "warning" : "success",
+      tags: ["binding", `scope:${binding.scope_mode}`, `status:${binding.status}`],
+      fields: [
+        { label: "Service", value: definition?.name ?? binding.service_id },
+        { label: "Service ID", value: binding.service_id },
+        { label: "Service Key", value: definition?.service_key ?? binding.service_key ?? "unknown" },
+        { label: "Context", value: binding.context_id },
+        { label: "Scope", value: binding.scope_mode },
+        { label: "Status", value: binding.status },
+        { label: "Permission Lane", value: lane },
+        { label: "Revoked", value: binding.revoked_at ?? "no" },
+      ],
+      relationships: [
+        {
+          label: "Permission lane",
+          value: lane,
+          detail: "Services should read only their badge-scoped permission lane, not the whole authority bucket.",
+          tone: "success",
+        },
+        {
+          label: "Service definition",
+          value: definition?.name ?? binding.service_id,
+          detail: "A shared service definition can bind into many contexts without one process per context.",
+          tone: definition ? "success" : "warning",
+        },
+      ],
+      raw: binding,
+    };
+  });
+  const definitionRecords: ResourceRecordSummary[] = definitions
+    .filter((definition) => !boundServiceIds.has(definition.id))
+    .map((definition) => ({
+      id: definition.id,
+      title: definition.name || definition.service_key,
+      subtitle: "service definition without visible context binding",
+      status: "definition",
+      statusTone: "neutral",
+      tags: ["definition", definition.service_key],
+      fields: [
+        { label: "Service ID", value: definition.id },
+        { label: "Service Key", value: definition.service_key },
+        { label: "Description", value: definition.description ?? "No description" },
+      ],
+      relationships: [
+        {
+          label: "Context binding",
+          value: "not visible",
+          detail: "This service definition has no active context binding in the loaded result set.",
+          tone: "neutral",
+        },
+      ],
+      raw: definition,
+    }));
+  const records = [...bindingRecords, ...definitionRecords];
+  const columns: ResourceListColumn[] = [
+    {
+      id: "service",
+      label: "Service",
+      render: (record) => record.title,
+      sortValue: (record) => record.title,
+      searchValue: (record) => record.title,
+    },
+    {
+      id: "context",
+      label: "Context",
+      render: (record) => record.fields?.find((field) => field.label === "Context")?.value ?? "not bound",
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Context")?.value ?? ""),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Context")?.value ?? ""),
+    },
+    {
+      id: "status",
+      label: "Status",
+      render: (record) => (
+        <StatusPill tone={record.statusTone ?? "neutral"} label={record.status ?? "unknown"} />
+      ),
+      sortValue: (record) => record.status ?? "",
+      searchValue: (record) => record.status ?? "",
+    },
+    {
+      id: "id",
+      label: "ID",
+      render: (record) => <span className="resource-list__id">{record.id}</span>,
+      sortValue: (record) => record.id,
+      searchValue: (record) => record.id,
+    },
+  ];
 
   return (
-    <div className="list">
-      {bindings.map((binding) => {
-        const definition = definitionsByID.get(binding.service_id);
-        const lane = `permissions.${binding.context_id}.${binding.service_id}.<badge_id>.>`;
-        return (
-          <div className="list-item" key={binding.id}>
-            <div>
-              <div className="list-item__title">
-                {definition?.name ?? binding.service_key ?? binding.service_id}
-              </div>
-              <div className="list-item__body">
-                binding:{binding.id} · context:{binding.context_id} · service:{binding.service_id}
-              </div>
-              <div className="list-item__body">
-                key:{definition?.service_key ?? binding.service_key ?? "unknown"} · scope:{binding.scope_mode} · status:{binding.status}
-              </div>
-              <div className="list-item__body">
-                permission lane:{lane}
-              </div>
-              <div className="list-item__body">
-                updated:{binding.updated_at ?? binding.created_at ?? "unknown"} · revoked:
-                {binding.revoked_at ?? "no"}
-              </div>
-            </div>
-            <StatusPill
-              tone={binding.revoked_at || binding.status !== "active" ? "warning" : "success"}
-              label={binding.status || "unknown"}
-            />
-          </div>
-        );
-      })}
-      {definitions
-        .filter((definition) => !bindings.some((binding) => binding.service_id === definition.id))
-        .map((definition) => (
-          <div className="list-item" key={definition.id}>
-            <div>
-              <div className="list-item__title">{definition.name || definition.service_key}</div>
-              <div className="list-item__body">
-                service:{definition.id} · key:{definition.service_key}
-              </div>
-              <div className="list-item__body">{definition.description ?? "No active binding visible for this service definition."}</div>
-            </div>
-            <StatusPill tone="neutral" label="definition" />
-          </div>
-        ))}
-    </div>
+    <ResourceInterfaceShell
+      eyebrow="Services"
+      title="Service Resource Interface"
+      summary="Shared service definitions and context service bindings with badge-scoped permission lane posture."
+      state={state}
+      records={records}
+      listColumns={columns}
+      showHeader={false}
+      createSlot={
+        <div className="empty-state">
+          Service provisioning remains in the controlled mutation panel until the resource create form is converted.
+        </div>
+      }
+      editSlot={
+        <div className="empty-state">
+          Service binding lifecycle controls remain in controlled mutation work for this pass.
+        </div>
+      }
+    />
   );
 }
 
-function KeyList({ keys }: { keys: PrincipalKeyReadModel[] }) {
-  if (!keys.length) {
-    return <div className="empty-state">No principal keys are visible yet.</div>;
-  }
+function KeyList({
+  state,
+  keys,
+  principals,
+}: {
+  state: ResourceInterfaceState;
+  keys: PrincipalKeyReadModel[];
+  principals: PrincipalReadModel[];
+}) {
+  const principalsById = new Map(principals.map((principal) => [principal.id, principal]));
+  const records: ResourceRecordSummary[] = keys.map((key) => {
+    const principal = principalsById.get(key.principal_id);
+    const inactive = Boolean(key.revoked_at) || key.status !== "active";
+    return {
+      id: key.id,
+      title: key.key_id,
+      subtitle: `principal:${key.principal_id} · algorithm:${key.algorithm}`,
+      status: key.status || "unknown",
+      statusTone: inactive ? "warning" : "success",
+      tags: [
+        key.algorithm,
+        key.issuer_signature_present ? "sentry-bound" : "binding-missing",
+        key.revoked_at ? "revoked" : "not-revoked",
+      ],
+      fields: [
+        { label: "Key ID", value: key.key_id },
+        { label: "Principal", value: key.principal_id },
+        { label: "Principal Type", value: principal?.principal_type ?? "unknown" },
+        { label: "Algorithm", value: key.algorithm },
+        { label: "Status", value: key.status },
+        { label: "Created", value: key.created_at ?? "unknown" },
+        { label: "Expires", value: key.expires_at ?? "not set" },
+        { label: "Revoked", value: key.revoked_at ?? "no" },
+        { label: "Sentry Binding", value: key.issuer_signature_present ? "present" : "missing" },
+      ],
+      relationships: [
+        {
+          label: "Principal",
+          value: key.principal_id,
+          detail: "Keys bind cryptographic authorship to a principal; they are not transport credentials by themselves.",
+          tone: principal ? "success" : "warning",
+        },
+        {
+          label: "Sentry key binding",
+          value: key.issuer_signature_present ? "present" : "missing",
+          detail: "Issuer binding tells verifiers that Sentry recognizes this public key for the principal.",
+          tone: key.issuer_signature_present ? "success" : "warning",
+        },
+      ],
+      lifecycleActions: [
+        {
+          id: "revoke",
+          label: key.revoked_at ? "Revoked" : "Revoke",
+          kind: "revoke",
+          disabled: Boolean(key.revoked_at),
+          confirmationLabel: "revoke principal key",
+          description: "Key revoke/rotate submissions remain in the controlled mutation panel until this resource action is wired.",
+        },
+      ],
+      raw: key,
+    };
+  });
+  const columns: ResourceListColumn[] = [
+    {
+      id: "key",
+      label: "Key",
+      render: (record) => record.title,
+      sortValue: (record) => record.title,
+      searchValue: (record) => record.title,
+    },
+    {
+      id: "principal",
+      label: "Principal",
+      render: (record) => <span className="resource-list__id">{record.fields?.find((field) => field.label === "Principal")?.value}</span>,
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Principal")?.value ?? ""),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Principal")?.value ?? ""),
+    },
+    {
+      id: "algorithm",
+      label: "Algorithm",
+      render: (record) => record.fields?.find((field) => field.label === "Algorithm")?.value ?? "unknown",
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Algorithm")?.value ?? ""),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Algorithm")?.value ?? ""),
+    },
+    {
+      id: "status",
+      label: "Status",
+      render: (record) => (
+        <StatusPill tone={record.statusTone ?? "neutral"} label={record.status ?? "unknown"} />
+      ),
+      sortValue: (record) => record.status ?? "",
+      searchValue: (record) => record.status ?? "",
+    },
+  ];
 
   return (
-    <div className="list">
-      {keys.map((key) => (
-        <div className="list-item" key={key.id}>
-          <div>
-            <div className="list-item__title">{key.key_id}</div>
-            <div className="list-item__body">
-              principal:{key.principal_id} · algorithm:{key.algorithm} · status:{key.status}
-            </div>
-            <div className="list-item__body">
-              created:{key.created_at ?? "unknown"} · expires:{key.expires_at ?? "not set"} · revoked:
-              {key.revoked_at ?? "no"}
-            </div>
-            <div className="list-item__body">
-              sentry binding:{key.issuer_signature_present ? "present" : "missing"}
-            </div>
-          </div>
-          <StatusPill tone={key.revoked_at || key.status !== "active" ? "warning" : "success"} label={key.status || "unknown"} />
+    <ResourceInterfaceShell
+      eyebrow="Keys"
+      title="Key Resource Interface"
+      summary="Principal key records, issuer binding posture, expiry, and revocation state without exposing private material."
+      state={state}
+      records={records}
+      listColumns={columns}
+      showHeader={false}
+      createSlot={
+        <div className="empty-state">
+          Browser key registration remains in the Level 3 command-signing panel.
         </div>
-      ))}
-    </div>
+      }
+      editSlot={
+        <div className="empty-state">
+          Key revoke and rotate submissions remain in the controlled mutation panel for this pass.
+        </div>
+      }
+    />
   );
 }
 
