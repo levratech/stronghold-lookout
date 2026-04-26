@@ -495,7 +495,10 @@ export function AuthorityPlaceholderPage() {
         }
 
         if (module?.id === "badges") {
-          const response = await readBadgeDefinitions(controller.signal, { limit: 100 }, authorityReadTransport);
+          const [response, contexts] = await Promise.all([
+            readBadgeDefinitions(controller.signal, { limit: 100 }, authorityReadTransport),
+            readContexts(controller.signal, { limit: 100 }, authorityReadTransport),
+          ]);
           setReadState({
             status: response.items.length ? "ready" : "empty",
             detail: response.items.length
@@ -503,7 +506,7 @@ export function AuthorityPlaceholderPage() {
               : "No badge definitions were returned for this session scope.",
             accounts: [],
             authMethods: [],
-            contexts: [],
+            contexts: contexts.items,
             identities: [],
             badges: response.items,
             principals: [],
@@ -850,7 +853,7 @@ export function AuthorityPlaceholderPage() {
                 grants={readState.grants}
               />
             ) : module.id === "badges" ? (
-              <BadgeList badges={readState.badges} />
+              <BadgeManagerSurface badges={readState.badges} contexts={readState.contexts} />
             ) : module.id === "principals" ? (
               <PrincipalList principals={readState.principals} />
             ) : module.id === "grants" ? (
@@ -1104,7 +1107,7 @@ function AuthorityMutationPanel({
         ) : moduleId === "principals" ? (
           <PrincipalMutationFields principals={readState.principals} defaultContextId={snapshotContextId} />
         ) : moduleId === "badges" ? (
-          <BadgeMutationFields badges={readState.badges} defaultContextId={snapshotContextId} />
+          <BadgeMutationFields badges={readState.badges} contexts={readState.contexts} defaultContextId={snapshotContextId} />
         ) : moduleId === "grants" ? (
           <GrantMutationFields badges={readState.badges} principals={readState.principals} defaultContextId={snapshotContextId} />
         ) : moduleId === "services" ? (
@@ -1787,9 +1790,11 @@ function ContextMutationFields({ contexts }: { contexts: ContextReadModel[] }) {
 
 function BadgeMutationFields({
   badges,
+  contexts,
   defaultContextId,
 }: {
   badges: BadgeDefinitionReadModel[];
+  contexts: ContextReadModel[];
   defaultContextId: string;
 }) {
   return (
@@ -1813,7 +1818,12 @@ function BadgeMutationFields({
       </label>
       <label>
         Context ID
-        <input name="context_id" defaultValue={defaultContextId} />
+        <select name="context_id" defaultValue={defaultContextId}>
+          <option value={defaultContextId}>Active context ({defaultContextId})</option>
+          {contexts.map((context) => (
+            <option value={context.id} key={context.id}>{context.name || context.id}</option>
+          ))}
+        </select>
       </label>
       <label>
         Badge Name / Permission
@@ -2666,20 +2676,38 @@ function countBy<T>(values: T[], keyFor: (value: T) => string | undefined) {
   return counts;
 }
 
-function BadgeList({ badges }: { badges: BadgeDefinitionReadModel[] }) {
+function BadgeManagerSurface({
+  badges,
+  contexts,
+}: {
+  badges: BadgeDefinitionReadModel[];
+  contexts: ContextReadModel[];
+}) {
   if (!badges.length) {
     return <div className="empty-state">No badge definitions are visible yet.</div>;
   }
 
+  const contextsById = new Map(contexts.map((context) => [context.id, context]));
+  const sortedBadges = [...badges].sort((left, right) => {
+    const leftContext = contextsById.get(left.context_id)?.name ?? left.context_id;
+    const rightContext = contextsById.get(right.context_id)?.name ?? right.context_id;
+    const contextDelta = leftContext.localeCompare(rightContext);
+    if (contextDelta !== 0) {
+      return contextDelta;
+    }
+    return (left.name || left.id).localeCompare(right.name || right.id);
+  });
+
   return (
     <div className="list">
-      {badges.map((badge) => (
+      {sortedBadges.map((badge) => (
         <div className="list-item" key={badge.id}>
           <div>
             <div className="list-item__title">{badge.name || badge.id}</div>
             <div className="list-item__body">
-              badge:{badge.id} · context:{badge.context_id}
+              context:{contextsById.get(badge.context_id)?.name ?? "unknown"} · context_id:{badge.context_id}
             </div>
+            <div className="list-item__body">badge_id:{badge.id}</div>
             <div className="list-item__body">{badge.description ?? "No description"}</div>
             <div className="list-item__body">archived:{badge.archived_at ?? "no"}</div>
           </div>

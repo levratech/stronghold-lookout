@@ -120,9 +120,9 @@ export const lookoutModules: LookoutModuleDefinition[] = [
     description: "Badge catalog and context-scoped authority labels.",
     status: "partial",
     requiredCapabilities: ["badges:read"],
-    summary: "Badge definitions before any grant/revoke mutations are exposed.",
+    summary: "Context-scoped badge definitions with create, update, and archive controls.",
     surfaceLabel: "Authority Surface",
-    entryHint: "Placeholder now; becomes the badge catalog read surface in this phase.",
+    entryHint: "Manage badge labels under a context before granting them to identities or principals.",
   },
   {
     id: "grants",
