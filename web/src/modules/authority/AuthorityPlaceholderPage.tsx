@@ -49,6 +49,7 @@ import type {
   AuthorityAuditEventReadModel,
   AuthorityMutationCommand,
   AuthorityMutationResult,
+  AuthorityReadFilter,
   AuthorityLoadStatus,
   BadgeDefinitionReadModel,
   ContextServiceBindingReadModel,
@@ -332,6 +333,39 @@ export function AuthorityPlaceholderPage() {
   const { snapshot } = useSession();
   const nats = useNats();
   const activePrincipal = snapshot.activePrincipal ?? snapshot.root;
+  const activeAccountId = activePrincipal?.accountId ?? snapshot.account?.accountId ?? "";
+  const activeIdentityId = activePrincipal?.identityId ?? snapshot.identity?.identityId ?? "";
+  const activePrincipalId = activePrincipal?.principalId ?? "";
+  const activeContextId = activePrincipal?.contextId ?? snapshot.context?.contextId ?? "";
+  const scopedFilters = useMemo(() => {
+    const base = { limit: 100 };
+    const withAccount: AuthorityReadFilter = activeAccountId ? { ...base, account_id: activeAccountId } : base;
+    const withContext: AuthorityReadFilter = activeContextId ? { ...base, context_id: activeContextId } : base;
+    const withAccountContext: AuthorityReadFilter = {
+      ...base,
+      ...(activeAccountId ? { account_id: activeAccountId } : {}),
+      ...(activeContextId ? { context_id: activeContextId } : {}),
+    };
+    const withPrincipal: AuthorityReadFilter = activePrincipalId ? { ...base, principal_id: activePrincipalId } : base;
+    const withPrincipalContext: AuthorityReadFilter = {
+      ...base,
+      ...(activePrincipalId ? { principal_id: activePrincipalId } : {}),
+      ...(activeContextId ? { context_id: activeContextId } : {}),
+    };
+    const withIdentityContext: AuthorityReadFilter = {
+      ...base,
+      ...(activeIdentityId ? { identity_id: activeIdentityId } : {}),
+      ...(activeContextId ? { context_id: activeContextId } : {}),
+    };
+    return {
+      account: withAccount,
+      context: withContext,
+      accountContext: withAccountContext,
+      principal: withPrincipal,
+      principalContext: withPrincipalContext,
+      identityContext: withIdentityContext,
+    };
+  }, [activeAccountId, activeContextId, activeIdentityId, activePrincipalId]);
   const authorityReadTransport = useMemo(
     () =>
       nats.state === "connected" && nats.connection && nats.grantToken
@@ -406,7 +440,7 @@ export function AuthorityPlaceholderPage() {
     async function load() {
       try {
         if (module?.id === "accounts") {
-          const response = await readAccounts(controller.signal, { limit: 100 }, authorityReadTransport);
+          const response = await readAccounts(controller.signal, scopedFilters.account, authorityReadTransport);
           setReadState({
             status: response.items.length ? "ready" : "empty",
             detail: response.items.length
@@ -429,8 +463,8 @@ export function AuthorityPlaceholderPage() {
 
         if (module?.id === "auth-methods") {
           const [response, accounts] = await Promise.all([
-            readAccountAuthMethods(controller.signal, { limit: 100 }, authorityReadTransport),
-            readAccounts(controller.signal, { limit: 100 }, authorityReadTransport),
+            readAccountAuthMethods(controller.signal, scopedFilters.account, authorityReadTransport),
+            readAccounts(controller.signal, scopedFilters.account, authorityReadTransport),
           ]);
           setReadState({
             status: response.items.length ? "ready" : "empty",
@@ -454,9 +488,9 @@ export function AuthorityPlaceholderPage() {
 
         if (module?.id === "identities") {
           const [response, accounts, contexts] = await Promise.all([
-            readIdentities(controller.signal, { limit: 100 }, authorityReadTransport),
-            readAccounts(controller.signal, { limit: 100 }, authorityReadTransport),
-            readContexts(controller.signal, { limit: 100 }, authorityReadTransport),
+            readIdentities(controller.signal, scopedFilters.accountContext, authorityReadTransport),
+            readAccounts(controller.signal, scopedFilters.account, authorityReadTransport),
+            readContexts(controller.signal, scopedFilters.context, authorityReadTransport),
           ]);
           setReadState({
             status: response.items.length ? "ready" : "empty",
@@ -480,10 +514,10 @@ export function AuthorityPlaceholderPage() {
 
         if (module?.id === "contexts") {
           const [contexts, identities, badges, grants] = await Promise.all([
-            readContexts(controller.signal, { limit: 100 }, authorityReadTransport),
-            readIdentities(controller.signal, { limit: 100 }, authorityReadTransport),
-            readBadgeDefinitions(controller.signal, { limit: 100 }, authorityReadTransport),
-            readBadgeGrants(controller.signal, { limit: 100 }, authorityReadTransport),
+            readContexts(controller.signal, scopedFilters.context, authorityReadTransport),
+            readIdentities(controller.signal, scopedFilters.accountContext, authorityReadTransport),
+            readBadgeDefinitions(controller.signal, scopedFilters.context, authorityReadTransport),
+            readBadgeGrants(controller.signal, scopedFilters.principalContext, authorityReadTransport),
           ]);
           setReadState({
             status: contexts.items.length ? "ready" : "empty",
@@ -507,8 +541,8 @@ export function AuthorityPlaceholderPage() {
 
         if (module?.id === "badges") {
           const [response, contexts] = await Promise.all([
-            readBadgeDefinitions(controller.signal, { limit: 100 }, authorityReadTransport),
-            readContexts(controller.signal, { limit: 100 }, authorityReadTransport),
+            readBadgeDefinitions(controller.signal, scopedFilters.context, authorityReadTransport),
+            readContexts(controller.signal, scopedFilters.context, authorityReadTransport),
           ]);
           setReadState({
             status: response.items.length ? "ready" : "empty",
@@ -531,7 +565,7 @@ export function AuthorityPlaceholderPage() {
         }
 
         if (module?.id === "principals") {
-          const response = await readPrincipals(controller.signal, { limit: 100 }, authorityReadTransport);
+          const response = await readPrincipals(controller.signal, scopedFilters.accountContext, authorityReadTransport);
           setReadState({
             status: response.items.length ? "ready" : "empty",
             detail: response.items.length
@@ -554,10 +588,10 @@ export function AuthorityPlaceholderPage() {
 
         if (module?.id === "grants") {
           const [response, badges, principals, identities] = await Promise.all([
-            readBadgeGrants(controller.signal, { limit: 100 }, authorityReadTransport),
-            readBadgeDefinitions(controller.signal, { limit: 100 }, authorityReadTransport),
-            readPrincipals(controller.signal, { limit: 100 }, authorityReadTransport),
-            readIdentities(controller.signal, { limit: 100 }, authorityReadTransport),
+            readBadgeGrants(controller.signal, scopedFilters.principalContext, authorityReadTransport),
+            readBadgeDefinitions(controller.signal, scopedFilters.context, authorityReadTransport),
+            readPrincipals(controller.signal, scopedFilters.accountContext, authorityReadTransport),
+            readIdentities(controller.signal, scopedFilters.accountContext, authorityReadTransport),
           ]);
           setReadState({
             status: response.items.length ? "ready" : "empty",
@@ -582,9 +616,9 @@ export function AuthorityPlaceholderPage() {
         if (module?.id === "services") {
           const [definitions, bindings, principals, badges] = await Promise.all([
             readServiceDefinitions(controller.signal, { limit: 100 }, authorityReadTransport),
-            readServiceBindings(controller.signal, { limit: 100 }, authorityReadTransport),
-            readPrincipals(controller.signal, { limit: 100 }, authorityReadTransport),
-            readBadgeDefinitions(controller.signal, { limit: 100 }, authorityReadTransport),
+            readServiceBindings(controller.signal, scopedFilters.context, authorityReadTransport),
+            readPrincipals(controller.signal, scopedFilters.accountContext, authorityReadTransport),
+            readBadgeDefinitions(controller.signal, scopedFilters.context, authorityReadTransport),
           ]);
           setReadState({
             status: definitions.items.length || bindings.items.length ? "ready" : "empty",
@@ -607,7 +641,7 @@ export function AuthorityPlaceholderPage() {
         }
 
         if (module?.id === "audit") {
-          const response = await readAuthorityAuditEvents(controller.signal, { limit: 100 }, authorityReadTransport);
+          const response = await readAuthorityAuditEvents(controller.signal, scopedFilters.principalContext, authorityReadTransport);
           setReadState({
             status: response.items.length ? "ready" : "empty",
             detail: response.items.length
@@ -629,8 +663,8 @@ export function AuthorityPlaceholderPage() {
         }
 
         const [response, principals] = await Promise.all([
-          readPrincipalKeys(controller.signal, { limit: 100 }, authorityReadTransport),
-          readPrincipals(controller.signal, { limit: 100 }, authorityReadTransport),
+          readPrincipalKeys(controller.signal, scopedFilters.principal, authorityReadTransport),
+          readPrincipals(controller.signal, scopedFilters.accountContext, authorityReadTransport),
         ]);
         setReadState({
           status: response.items.length ? "ready" : "empty",
@@ -676,7 +710,7 @@ export function AuthorityPlaceholderPage() {
 
     void load();
     return () => controller.abort();
-  }, [module, refreshNonce, authorityReadTransport]);
+  }, [module, refreshNonce, authorityReadTransport, scopedFilters]);
 
   useEffect(() => {
     if (!module || !isCommandSigningSurface(module.id)) {
