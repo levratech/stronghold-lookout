@@ -1,9 +1,44 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { lookoutEnvironment } from "../env";
-import { lookoutModules } from "./module-registry";
+import { lookoutModules, type LookoutModuleDefinition, type LookoutModuleId } from "./module-registry";
 import { useSession } from "../lib/session/SessionProvider";
 import { useNats } from "../lib/nats/NatsProvider";
 import { StatusPill } from "../components/ui/StatusPill";
+
+interface NavigationSection {
+  label: string;
+  moduleIds: LookoutModuleId[];
+  defaultOpen?: boolean;
+}
+
+const navigationSections: NavigationSection[] = [
+  {
+    label: "Home",
+    moduleIds: ["dashboard"],
+    defaultOpen: true,
+  },
+  {
+    label: "Manage",
+    moduleIds: ["contexts", "identities", "badges", "grants", "services"],
+    defaultOpen: true,
+  },
+  {
+    label: "Security",
+    moduleIds: ["accounts", "auth-methods", "principals", "keys"],
+  },
+  {
+    label: "Operations",
+    moduleIds: ["transport", "audit"],
+  },
+  {
+    label: "Debug",
+    moduleIds: ["overview", "aegis", "resource-interface"],
+  },
+];
+
+function isLookoutModule(module: LookoutModuleDefinition | undefined): module is LookoutModuleDefinition {
+  return Boolean(module);
+}
 
 function sessionTone(status: string) {
   switch (status) {
@@ -49,6 +84,7 @@ export function ShellLayout() {
       .filter((module) => module.route !== "/" && location.pathname.startsWith(module.route))
       .sort((a, b) => b.route.length - a.route.length)[0] ??
     lookoutModules.find((module) => module.route === "/");
+  const moduleById = new Map(lookoutModules.map((module) => [module.id, module]));
 
   const operatorSummary =
     activePrincipal?.email ??
@@ -133,23 +169,43 @@ export function ShellLayout() {
       <aside className="sidebar">
         <div className="sidebar__inner">
           <section className="sidebar__section">
-            <h2 className="sidebar__heading">Navigation</h2>
+            <h2 className="sidebar__heading">Lookout</h2>
             <nav className="sidebar__nav" aria-label="Primary">
-              {lookoutModules.map((module) => (
-                <NavLink
-                  key={module.id}
-                  to={module.route}
-                  end={module.route === "/"}
-                  className={({ isActive }) =>
-                    `nav-link${isActive ? " nav-link--active" : ""}`
-                  }
-                >
-                  <div className="nav-link__icon">{module.icon}</div>
-                  <div className="nav-link__text">
-                    <div className="nav-link__title">{module.navLabel}</div>
-                  </div>
-                </NavLink>
-              ))}
+              {navigationSections.map((section) => {
+                const modules = section.moduleIds
+                  .map((moduleId) => moduleById.get(moduleId))
+                  .filter(isLookoutModule);
+                const isActiveSection = modules.some((module) => module?.id === currentModule?.id);
+                return (
+                  <details
+                    className="nav-section"
+                    open={section.defaultOpen || isActiveSection}
+                    key={section.label}
+                  >
+                    <summary className="nav-section__summary">
+                      <span>{section.label}</span>
+                      <span className="nav-section__count">{modules.length}</span>
+                    </summary>
+                    <div className="nav-section__links">
+                      {modules.map((module) => (
+                        <NavLink
+                          key={module.id}
+                          to={module.route}
+                          end={module.route === "/"}
+                          className={({ isActive }) =>
+                            `nav-link${isActive ? " nav-link--active" : ""}`
+                          }
+                        >
+                          <div className="nav-link__icon">{module.icon}</div>
+                          <div className="nav-link__text">
+                            <div className="nav-link__title">{module.navLabel}</div>
+                          </div>
+                        </NavLink>
+                      ))}
+                    </div>
+                  </details>
+                );
+              })}
             </nav>
           </section>
         </div>
