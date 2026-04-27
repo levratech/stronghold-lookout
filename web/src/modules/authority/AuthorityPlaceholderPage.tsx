@@ -731,8 +731,17 @@ export function AuthorityPlaceholderPage() {
     return <Navigate to="/authority/accounts" replace />;
   }
 
-  const notes = surfaceNotes[module.id] ?? [];
   const isLiveSurface = isLiveReadSurface(module.id);
+  const usesResourceInterfaceShell = [
+    "identities",
+    "contexts",
+    "badges",
+    "principals",
+    "grants",
+    "services",
+    "keys",
+  ].includes(module.id);
+  const showTransportPosturePanel = module.id === "transport";
   const signingOptions =
     commandSigningState.posture?.status === "ready" && activePrincipal?.principalId
       ? {
@@ -741,6 +750,62 @@ export function AuthorityPlaceholderPage() {
           keyId: commandSigningState.posture.keyId,
         }
       : undefined;
+  const liveReadContent =
+    readState.status === "loading" || readState.status === "denied" || readState.status === "error" ? (
+      <AuthorityReadNotice status={readState.status} detail={readState.detail} sessionStatus={snapshot.status} />
+    ) : module.id === "accounts" ? (
+      <AccountList accounts={readState.accounts} />
+    ) : module.id === "auth-methods" ? (
+      <AuthMethodList methods={readState.authMethods} accounts={readState.accounts} />
+    ) : module.id === "identities" ? (
+      <IdentityList
+        state={{ status: readState.status, detail: readState.detail }}
+        identities={readState.identities}
+        accounts={readState.accounts}
+        contexts={readState.contexts}
+      />
+    ) : module.id === "contexts" ? (
+      <ContextManagerReadSurface
+        state={{ status: readState.status, detail: readState.detail }}
+        contexts={readState.contexts}
+        identities={readState.identities}
+        badges={readState.badges}
+        grants={readState.grants}
+      />
+    ) : module.id === "badges" ? (
+      <BadgeManagerSurface
+        state={{ status: readState.status, detail: readState.detail }}
+        badges={readState.badges}
+        contexts={readState.contexts}
+      />
+    ) : module.id === "principals" ? (
+      <PrincipalList
+        state={{ status: readState.status, detail: readState.detail }}
+        principals={readState.principals}
+      />
+    ) : module.id === "grants" ? (
+      <GrantList
+        state={{ status: readState.status, detail: readState.detail }}
+        grants={readState.grants}
+        badges={readState.badges}
+        principals={readState.principals}
+        identities={readState.identities}
+      />
+    ) : module.id === "services" ? (
+      <ServiceBindingList
+        state={{ status: readState.status, detail: readState.detail }}
+        definitions={readState.serviceDefinitions}
+        bindings={readState.serviceBindings}
+      />
+    ) : module.id === "audit" ? (
+      <AuditList events={readState.auditEvents} />
+    ) : (
+      <KeyList
+        state={{ status: readState.status, detail: readState.detail }}
+        keys={readState.keys}
+        principals={readState.principals}
+      />
+    );
 
   async function createBrowserCommandSigningKey() {
     const principalId = activePrincipal?.principalId;
@@ -842,72 +907,21 @@ export function AuthorityPlaceholderPage() {
       </header>
 
       <section className="grid grid--panels">
-        {isLiveSurface ? (
+        {isLiveSurface && usesResourceInterfaceShell ? (
+          liveReadContent
+        ) : isLiveSurface ? (
           <Panel
-            eyebrow="Live Read"
+            eyebrow="Records"
             title={liveSurfaceLabel(module.id)}
             description={readState.detail}
             actions={<StatusPill tone={statusTone(readState.status)} label={readState.status} />}
           >
-            {readState.status === "loading" || readState.status === "denied" || readState.status === "error" ? (
-              <AuthorityReadNotice status={readState.status} detail={readState.detail} sessionStatus={snapshot.status} />
-            ) : module.id === "accounts" ? (
-              <AccountList accounts={readState.accounts} />
-            ) : module.id === "auth-methods" ? (
-              <AuthMethodList methods={readState.authMethods} accounts={readState.accounts} />
-            ) : module.id === "identities" ? (
-              <IdentityList
-                state={{ status: readState.status, detail: readState.detail }}
-                identities={readState.identities}
-                accounts={readState.accounts}
-                contexts={readState.contexts}
-              />
-            ) : module.id === "contexts" ? (
-              <ContextManagerReadSurface
-                state={{ status: readState.status, detail: readState.detail }}
-                contexts={readState.contexts}
-                identities={readState.identities}
-                badges={readState.badges}
-                grants={readState.grants}
-              />
-            ) : module.id === "badges" ? (
-              <BadgeManagerSurface
-                state={{ status: readState.status, detail: readState.detail }}
-                badges={readState.badges}
-                contexts={readState.contexts}
-              />
-            ) : module.id === "principals" ? (
-              <PrincipalList
-                state={{ status: readState.status, detail: readState.detail }}
-                principals={readState.principals}
-              />
-            ) : module.id === "grants" ? (
-              <GrantList
-                state={{ status: readState.status, detail: readState.detail }}
-                grants={readState.grants}
-                badges={readState.badges}
-                principals={readState.principals}
-                identities={readState.identities}
-              />
-            ) : module.id === "services" ? (
-              <ServiceBindingList
-                state={{ status: readState.status, detail: readState.detail }}
-                definitions={readState.serviceDefinitions}
-                bindings={readState.serviceBindings}
-              />
-            ) : module.id === "audit" ? (
-              <AuditList events={readState.auditEvents} />
-            ) : (
-              <KeyList
-                state={{ status: readState.status, detail: readState.detail }}
-                keys={readState.keys}
-                principals={readState.principals}
-              />
-            )}
+            {liveReadContent}
           </Panel>
         ) : null}
 
-        <Panel
+        {showTransportPosturePanel ? (
+          <Panel
           eyebrow="Access State"
           title="Session and Transport Posture"
           description="Authority reads prefer browser NATS once the rail is connected, with same-origin Sentry HTTP kept visible as the compatibility fallback."
@@ -976,25 +990,8 @@ export function AuthorityPlaceholderPage() {
               <div className="state-notice__body">{snapshot.transport.detail}</div>
             </div>
           ) : null}
-        </Panel>
-
-        <Panel
-          eyebrow="Cockpit Surface"
-          title={module.description}
-          description={module.entryHint}
-          actions={<StatusPill tone="warning" label={module.status} />}
-        >
-          <div className="list">
-            {notes.map((note) => (
-              <div className="list-item" key={note}>
-                <div>
-                  <div className="list-item__title">Design Note</div>
-                  <div className="list-item__body">{note}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Panel>
+          </Panel>
+        ) : null}
 
         {isMutationSurface(module.id) ? (
           <AuthorityMutationPanel
@@ -1027,17 +1024,6 @@ export function AuthorityPlaceholderPage() {
           />
         ) : null}
 
-        <Panel
-          eyebrow="Non-Goals"
-          title="Authority Boundary"
-          description="Controls stay limited to the Sentry-backed read and mutation surfaces that already exist."
-        >
-          <div className="empty-state">
-            Lookout can inspect audit evidence and submit controlled account, auth-method, identity, context,
-            badge, grant, service, and key mutations. Browser transport activation, key recovery, and broader
-            mutation auditing still need their own work orders.
-          </div>
-        </Panel>
       </section>
     </div>
   );
@@ -1100,7 +1086,7 @@ function AuthorityMutationPanel({
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    onState({ status: "submitting", detail: "Submitting controlled authority mutation through Sentry." });
+    onState({ status: "submitting", detail: "Submitting action through Sentry." });
     try {
       const result = await submitAuthorityMutation(moduleId, form, signingOptions);
       onState({
@@ -1128,9 +1114,9 @@ function AuthorityMutationPanel({
 
   return (
     <Panel
-      eyebrow="Controlled Mutation"
+      eyebrow="Manage"
       title={mutationTitle(moduleId)}
-      description="These controls call Sentry authority mutations with same-origin credentials. They do not bypass Aegis, Sentry, or db-service."
+      description="Create, update, archive, revoke, or rotate records using the current Sentry-backed action path."
       actions={<StatusPill tone={mutationTone(mutationState.status)} label={mutationState.status} />}
     >
       <form className="authority-form" onSubmit={submit}>
@@ -1155,12 +1141,12 @@ function AuthorityMutationPanel({
         )}
         <div className="button-row">
           <button className="button" type="submit" disabled={mutationState.status === "submitting"}>
-            Submit Controlled Mutation
+            Submit Action
           </button>
         </div>
       </form>
       <div className={`state-notice ${mutationState.status === "accepted" ? "state-notice--success" : mutationState.status === "idle" ? "" : mutationState.status === "submitting" ? "state-notice--loading" : "state-notice--error"}`}>
-        <div className="state-notice__title">Mutation Result</div>
+        <div className="state-notice__title">Action Result</div>
         <div className="state-notice__body">
           {mutationState.detail}
           {mutationState.result?.error_code ? ` (${mutationState.result.error_code})` : ""}

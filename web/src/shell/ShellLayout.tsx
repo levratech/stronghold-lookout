@@ -179,7 +179,7 @@ export function ShellLayout() {
                 return (
                   <details
                     className="nav-section"
-                    open={section.defaultOpen || isActiveSection}
+                    open={section.defaultOpen || isActiveSection ? true : undefined}
                     key={section.label}
                   >
                     <summary className="nav-section__summary">
