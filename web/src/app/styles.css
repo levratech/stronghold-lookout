@@ -767,8 +767,16 @@ button {
 
 .resource-interface__grid {
   display: grid;
-  grid-template-columns: minmax(280px, 0.86fr) minmax(320px, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
+}
+
+.resource-view-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .resource-list {

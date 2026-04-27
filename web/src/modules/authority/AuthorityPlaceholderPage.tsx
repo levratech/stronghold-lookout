@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { connect, credsAuthenticator, type NatsConnection } from "nats.ws";
 import { Panel } from "../../components/ui/Panel";
@@ -195,6 +195,10 @@ type LiveReadState =
       keys: PrincipalKeyReadModel[];
       auditEvents: AuthorityAuditEventReadModel[];
     };
+
+type ResourceMutationSlotProps = {
+  mutationSlot?: ReactNode;
+};
 
 function statusTone(status: AuthorityLoadStatus) {
   switch (status) {
@@ -784,6 +788,26 @@ export function AuthorityPlaceholderPage() {
           keyId: commandSigningState.posture.keyId,
         }
       : undefined;
+  const mutationDisabledReason =
+    snapshot.status !== "authenticated"
+      ? "Log in before managing authority records. Read and mutation actions are intentionally unavailable without a same-origin session."
+      : !activePrincipal?.principalId
+        ? "No active principal is resolved for this session yet."
+        : module.id === "contexts" && !signingOptions
+          ? "Context create and update actions require a ready browser command-signing key for the active principal."
+          : undefined;
+  const mutationSlot = isMutationSurface(module.id) ? (
+    <AuthorityMutationPanel
+      moduleId={module.id}
+      readState={readState}
+      snapshotContextId={activePrincipal?.contextId ?? ""}
+      mutationState={mutationState}
+      signingOptions={signingOptions}
+      disabledReason={mutationDisabledReason}
+      onState={setMutationState}
+      onAccepted={() => setRefreshNonce((value) => value + 1)}
+    />
+  ) : undefined;
   const liveReadContent =
     readState.status === "loading" || readState.status === "denied" || readState.status === "error" ? (
       <AuthorityReadNotice status={readState.status} detail={readState.detail} sessionStatus={snapshot.status} />
@@ -797,6 +821,7 @@ export function AuthorityPlaceholderPage() {
         identities={readState.identities}
         accounts={readState.accounts}
         contexts={readState.contexts}
+        mutationSlot={mutationSlot}
       />
     ) : module.id === "contexts" ? (
       <ContextManagerReadSurface
@@ -806,17 +831,20 @@ export function AuthorityPlaceholderPage() {
         badges={readState.badges}
         grants={readState.grants}
         activeContextId={activeContextId}
+        mutationSlot={mutationSlot}
       />
     ) : module.id === "badges" ? (
       <BadgeManagerSurface
         state={{ status: readState.status, detail: readState.detail }}
         badges={readState.badges}
         contexts={readState.contexts}
+        mutationSlot={mutationSlot}
       />
     ) : module.id === "principals" ? (
       <PrincipalList
         state={{ status: readState.status, detail: readState.detail }}
         principals={readState.principals}
+        mutationSlot={mutationSlot}
       />
     ) : module.id === "grants" ? (
       <GrantList
@@ -825,12 +853,14 @@ export function AuthorityPlaceholderPage() {
         badges={readState.badges}
         principals={readState.principals}
         identities={readState.identities}
+        mutationSlot={mutationSlot}
       />
     ) : module.id === "services" ? (
       <ServiceBindingList
         state={{ status: readState.status, detail: readState.detail }}
         definitions={readState.serviceDefinitions}
         bindings={readState.serviceBindings}
+        mutationSlot={mutationSlot}
       />
     ) : module.id === "audit" ? (
       <AuditList events={readState.auditEvents} />
@@ -839,6 +869,7 @@ export function AuthorityPlaceholderPage() {
         state={{ status: readState.status, detail: readState.detail }}
         keys={readState.keys}
         principals={readState.principals}
+        mutationSlot={mutationSlot}
       />
     );
 
@@ -930,15 +961,6 @@ export function AuthorityPlaceholderPage() {
       }));
     }
   }
-
-  const mutationDisabledReason =
-    snapshot.status !== "authenticated"
-      ? "Log in before managing authority records. Read and mutation actions are intentionally unavailable without a same-origin session."
-      : !activePrincipal?.principalId
-        ? "No active principal is resolved for this session yet."
-        : module.id === "contexts" && !signingOptions
-          ? "Context create and update actions require a ready browser command-signing key for the active principal."
-          : undefined;
 
   return (
     <div className="page">
@@ -1035,19 +1057,6 @@ export function AuthorityPlaceholderPage() {
             </div>
           ) : null}
           </Panel>
-        ) : null}
-
-        {isMutationSurface(module.id) ? (
-          <AuthorityMutationPanel
-            moduleId={module.id}
-            readState={readState}
-            snapshotContextId={activePrincipal?.contextId ?? ""}
-            mutationState={mutationState}
-            signingOptions={signingOptions}
-            disabledReason={mutationDisabledReason}
-            onState={setMutationState}
-            onAccepted={() => setRefreshNonce((value) => value + 1)}
-          />
         ) : null}
 
         {module.id === "keys" ? (
@@ -2625,10 +2634,11 @@ function stringArrayClaim(value: unknown) {
 function PrincipalList({
   state,
   principals,
+  mutationSlot,
 }: {
   state: ResourceInterfaceState;
   principals: PrincipalReadModel[];
-}) {
+} & ResourceMutationSlotProps) {
   const records: ResourceRecordSummary[] = principals.map((principal) => {
     const revoked = Boolean(principal.revoked_at);
     const ephemeral = principal.is_ephemeral;
@@ -2710,16 +2720,16 @@ function PrincipalList({
       records={records}
       listColumns={columns}
       showHeader={false}
-      createSlot={
+      createSlot={mutationSlot ?? (
         <div className="empty-state">
           Durable principal creation remains in the controlled mutation panel until the resource create form is converted.
         </div>
-      }
-      editSlot={
+      )}
+      editSlot={mutationSlot ?? (
         <div className="empty-state">
           Principal revoke/rotate posture is handled by Keys and controlled mutation work for this pass.
         </div>
-      }
+      )}
     />
   );
 }
@@ -2730,13 +2740,14 @@ function GrantList({
   badges,
   principals,
   identities,
+  mutationSlot,
 }: {
   state: ResourceInterfaceState;
   grants: PrincipalBadgeGrantReadModel[];
   badges: BadgeDefinitionReadModel[];
   principals: PrincipalReadModel[];
   identities: IdentityReadModel[];
-}) {
+} & ResourceMutationSlotProps) {
   const badgesById = new Map(badges.map((badge) => [badge.id, badge]));
   const principalsById = new Map(principals.map((principal) => [principal.id, principal]));
   const identitiesByPrincipalId = new Map(identities.map((identity) => [identity.principal_id, identity]));
@@ -2853,16 +2864,16 @@ function GrantList({
       records={records}
       listColumns={columns}
       showHeader={false}
-      createSlot={
+      createSlot={mutationSlot ?? (
         <div className="empty-state">
           Grant creation remains in the controlled mutation panel until the resource create form is converted.
         </div>
-      }
-      editSlot={
+      )}
+      editSlot={mutationSlot ?? (
         <div className="empty-state">
           Grant revoke submissions remain in the controlled mutation panel for this pass.
         </div>
-      }
+      )}
     />
   );
 }
@@ -2871,11 +2882,12 @@ function ServiceBindingList({
   state,
   definitions,
   bindings,
+  mutationSlot,
 }: {
   state: ResourceInterfaceState;
   definitions: ServiceDefinitionReadModel[];
   bindings: ContextServiceBindingReadModel[];
-}) {
+} & ResourceMutationSlotProps) {
   const definitionsByID = new Map(definitions.map((definition) => [definition.id, definition]));
   const boundServiceIds = new Set(bindings.map((binding) => binding.service_id));
   const bindingRecords: ResourceRecordSummary[] = bindings.map((binding) => {
@@ -2983,16 +2995,16 @@ function ServiceBindingList({
       records={records}
       listColumns={columns}
       showHeader={false}
-      createSlot={
+      createSlot={mutationSlot ?? (
         <div className="empty-state">
           Service provisioning remains in the controlled mutation panel until the resource create form is converted.
         </div>
-      }
-      editSlot={
+      )}
+      editSlot={mutationSlot ?? (
         <div className="empty-state">
           Service binding lifecycle controls remain in controlled mutation work for this pass.
         </div>
-      }
+      )}
     />
   );
 }
@@ -3001,11 +3013,12 @@ function KeyList({
   state,
   keys,
   principals,
+  mutationSlot,
 }: {
   state: ResourceInterfaceState;
   keys: PrincipalKeyReadModel[];
   principals: PrincipalReadModel[];
-}) {
+} & ResourceMutationSlotProps) {
   const principalsById = new Map(principals.map((principal) => [principal.id, principal]));
   const records: ResourceRecordSummary[] = keys.map((key) => {
     const principal = principalsById.get(key.principal_id);
@@ -3101,16 +3114,16 @@ function KeyList({
       records={records}
       listColumns={columns}
       showHeader={false}
-      createSlot={
+      createSlot={mutationSlot ?? (
         <div className="empty-state">
           Browser key registration remains in the Level 3 command-signing panel.
         </div>
-      }
-      editSlot={
+      )}
+      editSlot={mutationSlot ?? (
         <div className="empty-state">
           Key revoke and rotate submissions remain in the controlled mutation panel for this pass.
         </div>
-      }
+      )}
     />
   );
 }
@@ -3158,6 +3171,7 @@ function ContextManagerReadSurface({
   badges,
   grants,
   activeContextId,
+  mutationSlot,
 }: {
   state: ResourceInterfaceState;
   contexts: ContextReadModel[];
@@ -3165,9 +3179,10 @@ function ContextManagerReadSurface({
   badges: BadgeDefinitionReadModel[];
   grants: PrincipalBadgeGrantReadModel[];
   activeContextId?: string;
-}) {
+} & ResourceMutationSlotProps) {
   const [query, setQuery] = useState("");
   const [selectedContextId, setSelectedContextId] = useState<string>();
+  const [mode, setMode] = useState<"list" | "detail" | "create" | "edit">("list");
   const sortedContexts = [...contexts].sort((left, right) => {
     const depthDelta = (left.depth ?? 0) - (right.depth ?? 0);
     if (depthDelta !== 0) {
@@ -3223,11 +3238,92 @@ function ContextManagerReadSurface({
           eyebrow="My Contexts"
           title="No contexts are visible"
           description={state.detail}
-          actions={<StatusPill tone={statusTone(state.status)} label={state.status} />}
+          actions={
+            <div className="resource-view-actions">
+              <StatusPill tone={statusTone(state.status)} label={state.status} />
+              {mutationSlot ? (
+                <button className="button" type="button" onClick={() => setMode("create")}>
+                  Create
+                </button>
+              ) : null}
+            </div>
+          }
         >
-          <div className="empty-state">
-            Once this identity can see or manage a context, it will appear here. Other contexts remain hidden.
-          </div>
+          {mode === "create" && mutationSlot ? (
+            mutationSlot
+          ) : (
+            <div className="empty-state">
+              Once this identity can see or manage a context, it will appear here. Other contexts remain hidden.
+            </div>
+          )}
+        </Panel>
+      </div>
+    );
+  }
+
+  if (mode === "create" || mode === "edit") {
+    return (
+      <div className="context-manager">
+        <Panel
+          eyebrow={mode === "create" ? "Create" : "Edit"}
+          title={mode === "create" ? "Create Context" : `Edit ${selectedContext?.name || "Context"}`}
+          description={
+            mode === "create"
+              ? "Create a new context from a dedicated form instead of mixing creation into the list."
+              : "Update the selected context from a dedicated form."
+          }
+          actions={
+            <button className="button button--ghost" type="button" onClick={() => setMode(mode === "edit" ? "detail" : "list")}>
+              {mode === "edit" ? "Back to detail" : "Back to list"}
+            </button>
+          }
+        >
+          {mutationSlot ?? (
+            <div className="empty-state">
+              Context create and edit controls are not mounted yet.
+            </div>
+          )}
+        </Panel>
+      </div>
+    );
+  }
+
+  if (mode === "detail") {
+    return (
+      <div className="context-manager">
+        <Panel
+          eyebrow="Selected Context"
+          title={selectedContext?.name || "No context selected"}
+          description="Use this view to understand where the context sits and what authority objects are visible inside it."
+          actions={
+            <div className="resource-view-actions">
+              <button className="button button--ghost" type="button" onClick={() => setMode("list")}>
+                Back to list
+              </button>
+              {selectedContext && mutationSlot ? (
+                <button className="button" type="button" onClick={() => setMode("edit")}>
+                  Edit
+                </button>
+              ) : null}
+              {selectedContext ? (
+                <StatusPill
+                  tone={selectedContext.id === activeContextId ? "success" : "neutral"}
+                  label={selectedContext.id === activeContextId ? "current" : "visible"}
+                />
+              ) : null}
+            </div>
+          }
+        >
+          {selectedContext ? (
+            <ContextDetailView
+              context={selectedContext}
+              children={contextChildren}
+              counts={contextCounts(selectedContext)}
+              activeContextId={activeContextId}
+            />
+          ) : (
+            <div className="empty-state">Select a visible context to inspect it.</div>
+          )}
         </Panel>
       </div>
     );
@@ -3239,7 +3335,16 @@ function ContextManagerReadSurface({
         eyebrow="My Contexts"
         title={`${visibleContexts.length} visible context${visibleContexts.length === 1 ? "" : "s"}`}
         description="These are the contexts visible to the active session scope. Other contexts are intentionally not shown here."
-        actions={<StatusPill tone={statusTone(state.status)} label={state.status} />}
+        actions={
+          <div className="resource-view-actions">
+            <StatusPill tone={statusTone(state.status)} label={state.status} />
+            {mutationSlot ? (
+              <button className="button" type="button" onClick={() => setMode("create")}>
+                Create
+              </button>
+            ) : null}
+          </div>
+        }
       >
         <div className="context-manager__toolbar">
           <label className="resource-list-controls__search">
@@ -3268,7 +3373,10 @@ function ContextManagerReadSurface({
               <button
                 className={`context-card${selected ? " context-card--selected" : ""}${active ? " context-card--active" : ""}`}
                 key={context.id}
-                onClick={() => setSelectedContextId(context.id)}
+                onClick={() => {
+                  setSelectedContextId(context.id);
+                  setMode("detail");
+                }}
                 type="button"
               >
                 <span className="context-card__main">
@@ -3291,31 +3399,6 @@ function ContextManagerReadSurface({
             );
           })}
         </div>
-      </Panel>
-
-      <Panel
-        eyebrow="Selected Context"
-        title={selectedContext?.name || "No context selected"}
-        description="Use this view to understand where the context sits and what authority objects are visible inside it."
-        actions={
-          selectedContext ? (
-            <StatusPill
-              tone={selectedContext.id === activeContextId ? "success" : "neutral"}
-              label={selectedContext.id === activeContextId ? "current" : "visible"}
-            />
-          ) : undefined
-        }
-      >
-        {selectedContext ? (
-          <ContextDetailView
-            context={selectedContext}
-            children={contextChildren}
-            counts={contextCounts(selectedContext)}
-            activeContextId={activeContextId}
-          />
-        ) : (
-          <div className="empty-state">Select a visible context to inspect it.</div>
-        )}
       </Panel>
     </div>
   );
@@ -3437,11 +3520,12 @@ function BadgeManagerSurface({
   state,
   badges,
   contexts,
+  mutationSlot,
 }: {
   state: ResourceInterfaceState;
   badges: BadgeDefinitionReadModel[];
   contexts: ContextReadModel[];
-}) {
+} & ResourceMutationSlotProps) {
   const contextsById = new Map(contexts.map((context) => [context.id, context]));
   const sortedBadges = [...badges].sort((left, right) => {
     const leftContext = contextsById.get(left.context_id)?.name ?? left.context_id;
@@ -3541,16 +3625,16 @@ function BadgeManagerSurface({
       records={records}
       listColumns={columns}
       showHeader={false}
-      createSlot={
+      createSlot={mutationSlot ?? (
         <div className="empty-state">
           Badge create/update controls remain in the controlled mutation panel until the resource create form is converted.
         </div>
-      }
-      editSlot={
+      )}
+      editSlot={mutationSlot ?? (
         <div className="empty-state">
           Badge edits and archive submissions remain in the controlled mutation panel for this pass.
         </div>
-      }
+      )}
     />
   );
 }
@@ -3628,12 +3712,13 @@ function IdentityList({
   identities,
   accounts,
   contexts,
+  mutationSlot,
 }: {
   state: ResourceInterfaceState;
   identities: IdentityReadModel[];
   accounts: AccountReadModel[];
   contexts: ContextReadModel[];
-}) {
+} & ResourceMutationSlotProps) {
   const accountsById = new Map(accounts.map((account) => [account.id, account]));
   const contextsById = new Map(contexts.map((context) => [context.id, context]));
   const records: ResourceRecordSummary[] = identities.map((identity) => {
@@ -3732,16 +3817,16 @@ function IdentityList({
       records={records}
       listColumns={columns}
       showHeader={false}
-      createSlot={
+      createSlot={mutationSlot ?? (
         <div className="empty-state">
           Identity, person subject, agent, and service creation remain in the controlled mutation panel until the resource create form is converted.
         </div>
-      }
-      editSlot={
+      )}
+      editSlot={mutationSlot ?? (
         <div className="empty-state">
           Identity edits and lifecycle controls are intentionally not mounted in this pass.
         </div>
-      }
+      )}
     />
   );
 }

@@ -9,6 +9,8 @@ import type {
   ResourceRecordSummary,
 } from "./resource-types";
 
+type ResourceInterfaceMode = "list" | "create" | "detail" | "edit" | "lifecycle";
+
 function statusTone(status: ResourceInterfaceState["status"]) {
   switch (status) {
     case "ready":
@@ -37,7 +39,11 @@ export interface ResourceInterfaceShellProps {
   editSlot?: ReactNode;
   detailSlot?: ReactNode;
   lifecycleSlot?: ReactNode;
+  createLabel?: string;
+  editLabel?: string;
   showHeader?: boolean;
+  onCreateRequested?: () => void;
+  onEditRequested?: (record: ResourceRecordSummary) => void;
   onLifecycleAction?: (
     record: ResourceRecordSummary,
     action: ResourceLifecycleAction,
@@ -57,7 +63,11 @@ export function ResourceInterfaceShell({
   editSlot,
   detailSlot,
   lifecycleSlot,
+  createLabel = "New Resource",
+  editLabel = "Edit Resource",
   showHeader = true,
+  onCreateRequested,
+  onEditRequested,
   onLifecycleAction,
 }: ResourceInterfaceShellProps) {
   const columns = useMemo(
@@ -65,6 +75,8 @@ export function ResourceInterfaceShell({
     [listColumns],
   );
   const [query, setQuery] = useState("");
+  const [mode, setMode] = useState<ResourceInterfaceMode>("list");
+  const [internalSelectedId, setInternalSelectedId] = useState<string>();
   const [sortColumnId, setSortColumnId] = useState(columns[0]?.id ?? "title");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [visibleColumnIds, setVisibleColumnIds] = useState(
@@ -99,9 +111,39 @@ export function ResourceInterfaceShell({
       return leftValue.localeCompare(rightValue, undefined, { numeric: true }) * direction;
     });
   }, [records, columns, query, sortColumnId, sortDirection]);
+  const effectiveSelectedId = selectedId ?? internalSelectedId;
   const selectedRecord =
-    records.find((record) => record.id === selectedId) ?? filteredRecords[0] ?? records[0];
+    records.find((record) => record.id === effectiveSelectedId) ??
+    filteredRecords[0] ??
+    records[0];
   const selectedRecordId = selectedRecord?.id;
+  const createAvailable = Boolean(createSlot || onCreateRequested);
+  const editAvailable = Boolean(selectedRecord && (editSlot || onEditRequested));
+  const lifecycleAvailable = Boolean(
+    selectedRecord && (lifecycleSlot || selectedRecord.lifecycleActions?.length),
+  );
+
+  function selectRecord(record: ResourceRecordSummary) {
+    setInternalSelectedId(record.id);
+    onSelectRecord?.(record.id);
+    setMode("detail");
+  }
+
+  function requestCreate() {
+    if (onCreateRequested) {
+      onCreateRequested();
+      return;
+    }
+    setMode("create");
+  }
+
+  function requestEdit(record: ResourceRecordSummary) {
+    if (onEditRequested) {
+      onEditRequested(record);
+      return;
+    }
+    setMode("edit");
+  }
 
   return (
     <div className="resource-interface">
@@ -117,190 +159,250 @@ export function ResourceInterfaceShell({
       ) : null}
 
       <section className="resource-interface__grid">
-        <Panel
-          eyebrow="List"
-          title={`${filteredRecords.length} visible of ${records.length} loaded record${
-            records.length === 1 ? "" : "s"
-          }`}
-          description={state.detail}
-        >
-          {records.length ? (
-            <div className="resource-list-shell">
-              <div className="resource-list-controls">
-                <label className="resource-list-controls__search">
-                  Quick filter
-                  <input
-                    value={query}
-                    onChange={(event) => setQuery(event.currentTarget.value)}
-                    placeholder="Search loaded records"
-                    type="search"
-                  />
-                </label>
-                <label>
-                  Sort
-                  <select
-                    value={sortColumnId}
-                    onChange={(event) => setSortColumnId(event.currentTarget.value)}
-                  >
-                    {columns.map((column) => (
-                      <option key={column.id} value={column.id}>
-                        {column.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Direction
-                  <select
-                    value={sortDirection}
-                    onChange={(event) => setSortDirection(event.currentTarget.value as "asc" | "desc")}
-                  >
-                    <option value="asc">Ascending</option>
-                    <option value="desc">Descending</option>
-                  </select>
-                </label>
-              </div>
-
-              <fieldset className="resource-column-picker">
-                <legend>Show columns</legend>
-                {columns.map((column) => (
-                  <label key={column.id}>
-                    <input
-                      checked={visibleColumnIds.has(column.id)}
-                      onChange={() => {
-                        setVisibleColumnIds((current) => {
-                          const next = new Set(current);
-                          if (next.has(column.id)) {
-                            next.delete(column.id);
-                          } else {
-                            next.add(column.id);
-                          }
-                          return next;
-                        });
-                      }}
-                      type="checkbox"
-                    />
-                    {column.label}
-                  </label>
-                ))}
-              </fieldset>
-
-              {filteredRecords.length ? (
-                <div className="resource-list">
-                  {filteredRecords.map((record) => (
-                <button
-                  className={`resource-list__row${
-                    record.id === selectedRecordId ? " resource-list__row--active" : ""
-                  }`}
-                  key={record.id}
-                  type="button"
-                  onClick={() => onSelectRecord?.(record.id)}
-                >
-                  {visibleColumns.length ? (
-                    visibleColumns.map((column) => (
-                      <span className="resource-list__cell" key={column.id}>
-                        <span className="resource-list__label">{column.label}</span>
-                        <span className="resource-list__value">{column.render(record)}</span>
-                      </span>
-                    ))
-                  ) : (
-                    <span className="resource-list__cell">
-                      <span className="resource-list__label">Columns</span>
-                      <span className="resource-list__value">No columns selected</span>
-                    </span>
-                  )}
+        {mode === "list" ? (
+          <Panel
+            eyebrow="List"
+            title={`${filteredRecords.length} visible of ${records.length} loaded record${
+              records.length === 1 ? "" : "s"
+            }`}
+            description={state.detail}
+            actions={
+              createAvailable ? (
+                <button className="button" type="button" onClick={requestCreate}>
+                  Create
                 </button>
-                  ))}
+              ) : undefined
+            }
+          >
+            {records.length ? (
+              <div className="resource-list-shell">
+                <div className="resource-list-controls">
+                  <label className="resource-list-controls__search">
+                    Quick filter
+                    <input
+                      value={query}
+                      onChange={(event) => setQuery(event.currentTarget.value)}
+                      placeholder="Search loaded records"
+                      type="search"
+                    />
+                  </label>
+                  <label>
+                    Sort
+                    <select
+                      value={sortColumnId}
+                      onChange={(event) => setSortColumnId(event.currentTarget.value)}
+                    >
+                      {columns.map((column) => (
+                        <option key={column.id} value={column.id}>
+                          {column.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Direction
+                    <select
+                      value={sortDirection}
+                      onChange={(event) => setSortDirection(event.currentTarget.value as "asc" | "desc")}
+                    >
+                      <option value="asc">Ascending</option>
+                      <option value="desc">Descending</option>
+                    </select>
+                  </label>
                 </div>
+
+                <fieldset className="resource-column-picker">
+                  <legend>Show columns</legend>
+                  {columns.map((column) => (
+                    <label key={column.id}>
+                      <input
+                        checked={visibleColumnIds.has(column.id)}
+                        onChange={() => {
+                          setVisibleColumnIds((current) => {
+                            const next = new Set(current);
+                            if (next.has(column.id)) {
+                              next.delete(column.id);
+                            } else {
+                              next.add(column.id);
+                            }
+                            return next;
+                          });
+                        }}
+                        type="checkbox"
+                      />
+                      {column.label}
+                    </label>
+                  ))}
+                </fieldset>
+
+                {filteredRecords.length ? (
+                  <div className="resource-list">
+                    {filteredRecords.map((record) => (
+                      <button
+                        className={`resource-list__row${
+                          record.id === selectedRecordId ? " resource-list__row--active" : ""
+                        }`}
+                        key={record.id}
+                        type="button"
+                        onClick={() => selectRecord(record)}
+                      >
+                        {visibleColumns.length ? (
+                          visibleColumns.map((column) => (
+                            <span className="resource-list__cell" key={column.id}>
+                              <span className="resource-list__label">{column.label}</span>
+                              <span className="resource-list__value">{column.render(record)}</span>
+                            </span>
+                          ))
+                        ) : (
+                          <span className="resource-list__cell">
+                            <span className="resource-list__label">Columns</span>
+                            <span className="resource-list__value">No columns selected</span>
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    No loaded records match the current filter.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="empty-state">{state.detail}</div>
+            )}
+          </Panel>
+        ) : null}
+
+        {mode === "create" ? (
+          <Panel
+            eyebrow="Create"
+            title={createLabel}
+            description="Create is separated from the list so the user is intentionally starting a new record."
+            actions={
+              <button className="button button--ghost" type="button" onClick={() => setMode("list")}>
+                Back to list
+              </button>
+            }
+          >
+            {createSlot ?? (
+              <div className="empty-state">
+                This resource has not mounted a create form yet.
+              </div>
+            )}
+          </Panel>
+        ) : null}
+
+        {mode === "detail" ? (
+          <Panel
+            eyebrow="Detail"
+            title={selectedRecord?.title ?? "No record selected"}
+            description="Detail/view exposes one selected record before any mutation is started."
+            actions={
+              <div className="resource-view-actions">
+                <button className="button button--ghost" type="button" onClick={() => setMode("list")}>
+                  Back to list
+                </button>
+                {selectedRecord && editAvailable ? (
+                  <button className="button" type="button" onClick={() => requestEdit(selectedRecord)}>
+                    Edit
+                  </button>
+                ) : null}
+                {selectedRecord && lifecycleAvailable ? (
+                  <button className="button button--secondary" type="button" onClick={() => setMode("lifecycle")}>
+                    Archive / Disable
+                  </button>
+                ) : null}
+              </div>
+            }
+          >
+            {selectedRecord ? (
+              detailSlot ?? <ResourceRecordDetail record={selectedRecord} />
+            ) : (
+              <div className="empty-state">Select a record to inspect it.</div>
+            )}
+          </Panel>
+        ) : null}
+
+        {mode === "edit" ? (
+          <Panel
+            eyebrow="Edit"
+            title={selectedRecord ? `${editLabel}: ${selectedRecord.title}` : editLabel}
+            description="Edits stay in a dedicated view so changes are explicit and confirmation-friendly."
+            actions={
+              <button className="button button--ghost" type="button" onClick={() => setMode(selectedRecord ? "detail" : "list")}>
+                {selectedRecord ? "Back to detail" : "Back to list"}
+              </button>
+            }
+          >
+            {editSlot ?? (
+              <div className="empty-state">
+                This resource has not mounted an edit form yet.
+              </div>
+            )}
+          </Panel>
+        ) : null}
+
+        {mode === "lifecycle" ? (
+          <Panel
+            eyebrow="Lifecycle"
+            title={selectedRecord ? `Archive / Disable: ${selectedRecord.title}` : "Archive / Disable"}
+            description="Delete-like operations should be explicit lifecycle decisions, not accidental row actions."
+            actions={
+              <button className="button button--ghost" type="button" onClick={() => setMode(selectedRecord ? "detail" : "list")}>
+                {selectedRecord ? "Back to detail" : "Back to list"}
+              </button>
+            }
+          >
+            {lifecycleSlot ??
+              (selectedRecord ? (
+                <ResourceLifecycleActions
+                  record={selectedRecord}
+                  result={lifecycleResult}
+                  pending={pendingLifecycle}
+                  onCancel={() => setPendingLifecycle(undefined)}
+                  onConfirm={async () => {
+                    if (!pendingLifecycle) {
+                      return;
+                    }
+                    if (!onLifecycleAction) {
+                      setLifecycleResult({
+                        status: "invalid",
+                        detail:
+                          "No backend lifecycle handler is mounted for this resource contract yet.",
+                      });
+                      setPendingLifecycle(undefined);
+                      return;
+                    }
+                    try {
+                      const result = await onLifecycleAction(
+                        pendingLifecycle.record,
+                        pendingLifecycle.action,
+                      );
+                      setLifecycleResult(result);
+                    } catch (error) {
+                      setLifecycleResult({
+                        status: "error",
+                        detail:
+                          error instanceof Error
+                            ? error.message
+                            : "Lifecycle action failed without a typed error.",
+                      });
+                    } finally {
+                      setPendingLifecycle(undefined);
+                    }
+                  }}
+                  onRequest={(action) =>
+                    setPendingLifecycle({ record: selectedRecord, action })
+                  }
+                />
               ) : (
                 <div className="empty-state">
-                  No loaded records match the current filter.
+                  Select a record before lifecycle controls are shown.
                 </div>
-              )}
-            </div>
-          ) : (
-            <div className="empty-state">{state.detail}</div>
-          )}
-        </Panel>
-
-        <Panel
-          eyebrow="Create"
-          title="New Resource"
-          description="Creation controls belong in a dedicated region so the list remains scan-first."
-        >
-          {createSlot ?? (
-            <div className="empty-state">
-              This resource has not mounted a create form yet.
-            </div>
-          )}
-        </Panel>
-
-        <Panel
-          eyebrow="Detail"
-          title={selectedRecord?.title ?? "No record selected"}
-          description="Detail/view exposes relationships, lifecycle state, and raw IDs before mutation."
-        >
-          {selectedRecord ? (
-            detailSlot ?? <ResourceRecordDetail record={selectedRecord} />
-          ) : (
-            <div className="empty-state">Select a record to inspect it.</div>
-          )}
-        </Panel>
-
-        <Panel
-          eyebrow="Edit and Lifecycle"
-          title="Controlled Actions"
-          description="Edits and lifecycle markers are explicit, confirmation-friendly, and audit-aware."
-        >
-          {editSlot}
-          {lifecycleSlot ??
-            (selectedRecord ? (
-              <ResourceLifecycleActions
-                record={selectedRecord}
-                result={lifecycleResult}
-                pending={pendingLifecycle}
-                onCancel={() => setPendingLifecycle(undefined)}
-                onConfirm={async () => {
-                  if (!pendingLifecycle) {
-                    return;
-                  }
-                  if (!onLifecycleAction) {
-                    setLifecycleResult({
-                      status: "invalid",
-                      detail:
-                        "No backend lifecycle handler is mounted for this resource contract yet.",
-                    });
-                    setPendingLifecycle(undefined);
-                    return;
-                  }
-                  try {
-                    const result = await onLifecycleAction(
-                      pendingLifecycle.record,
-                      pendingLifecycle.action,
-                    );
-                    setLifecycleResult(result);
-                  } catch (error) {
-                    setLifecycleResult({
-                      status: "error",
-                      detail:
-                        error instanceof Error
-                          ? error.message
-                          : "Lifecycle action failed without a typed error.",
-                    });
-                  } finally {
-                    setPendingLifecycle(undefined);
-                  }
-                }}
-                onRequest={(action) =>
-                  setPendingLifecycle({ record: selectedRecord, action })
-                }
-              />
-            ) : (
-              <div className="empty-state">
-                Select a record before lifecycle controls are shown.
-              </div>
-            ))}
-        </Panel>
+              ))}
+          </Panel>
+        ) : null}
       </section>
     </div>
   );
