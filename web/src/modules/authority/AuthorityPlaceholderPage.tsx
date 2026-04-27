@@ -1204,13 +1204,15 @@ function AuthorityMutationPanel({
           </div>
         </form>
       )}
-      <div className={`state-notice ${mutationState.status === "accepted" ? "state-notice--success" : mutationState.status === "idle" ? "" : mutationState.status === "submitting" ? "state-notice--loading" : "state-notice--error"}`}>
-        <div className="state-notice__title">Action Result</div>
-        <div className="state-notice__body">
-          {mutationState.detail}
-          {mutationState.result?.error_code ? ` (${mutationState.result.error_code})` : ""}
+      {!disabledReason || mutationState.status !== "idle" ? (
+        <div className={`state-notice ${mutationState.status === "accepted" ? "state-notice--success" : mutationState.status === "idle" ? "" : mutationState.status === "submitting" ? "state-notice--loading" : "state-notice--error"}`}>
+          <div className="state-notice__title">Action Result</div>
+          <div className="state-notice__body">
+            {mutationState.detail}
+            {mutationState.result?.error_code ? ` (${mutationState.result.error_code})` : ""}
+          </div>
         </div>
-      </div>
+      ) : null}
     </Panel>
   );
 }
