@@ -805,6 +805,7 @@ export function AuthorityPlaceholderPage() {
         identities={readState.identities}
         badges={readState.badges}
         grants={readState.grants}
+        activeContextId={activeContextId}
       />
     ) : module.id === "badges" ? (
       <BadgeManagerSurface
@@ -930,6 +931,15 @@ export function AuthorityPlaceholderPage() {
     }
   }
 
+  const mutationDisabledReason =
+    snapshot.status !== "authenticated"
+      ? "Log in before managing authority records. Read and mutation actions are intentionally unavailable without a same-origin session."
+      : !activePrincipal?.principalId
+        ? "No active principal is resolved for this session yet."
+        : module.id === "contexts" && !signingOptions
+          ? "Context create and update actions require a ready browser command-signing key for the active principal."
+          : undefined;
+
   return (
     <div className="page">
       <header className="page__header">
@@ -1034,6 +1044,7 @@ export function AuthorityPlaceholderPage() {
             snapshotContextId={activePrincipal?.contextId ?? ""}
             mutationState={mutationState}
             signingOptions={signingOptions}
+            disabledReason={mutationDisabledReason}
             onState={setMutationState}
             onAccepted={() => setRefreshNonce((value) => value + 1)}
           />
@@ -1105,6 +1116,7 @@ function AuthorityMutationPanel({
   snapshotContextId,
   mutationState,
   signingOptions,
+  disabledReason,
   onState,
   onAccepted,
 }: {
@@ -1113,6 +1125,7 @@ function AuthorityMutationPanel({
   snapshotContextId: string;
   mutationState: MutationState;
   signingOptions?: AuthorityMutationSigningOptions;
+  disabledReason?: string;
   onState: (state: MutationState) => void;
   onAccepted: () => void;
 }) {
@@ -1150,35 +1163,47 @@ function AuthorityMutationPanel({
     <Panel
       eyebrow="Manage"
       title={mutationTitle(moduleId)}
-      description="Create, update, archive, revoke, or rotate records using the current Sentry-backed action path."
-      actions={<StatusPill tone={mutationTone(mutationState.status)} label={mutationState.status} />}
+      description={mutationDescription(moduleId)}
+      actions={
+        <StatusPill
+          tone={disabledReason ? "warning" : mutationTone(mutationState.status)}
+          label={disabledReason ? "blocked" : mutationState.status}
+        />
+      }
     >
-      <form className="authority-form" onSubmit={submit}>
-        {moduleId === "accounts" ? (
-          <AccountMutationFields defaultDomainId={snapshotContextId} />
-        ) : moduleId === "auth-methods" ? (
-          <AuthMethodMutationFields accounts={readState.accounts} defaultDomainId={snapshotContextId} />
-        ) : moduleId === "identities" ? (
-          <IdentityMutationFields accounts={readState.accounts} contexts={readState.contexts} defaultContextId={snapshotContextId} />
-        ) : moduleId === "principals" ? (
-          <PrincipalMutationFields principals={readState.principals} defaultContextId={snapshotContextId} />
-        ) : moduleId === "badges" ? (
-          <BadgeMutationFields badges={readState.badges} contexts={readState.contexts} defaultContextId={snapshotContextId} />
-        ) : moduleId === "grants" ? (
-          <GrantMutationFields badges={readState.badges} identities={readState.identities} principals={readState.principals} defaultContextId={snapshotContextId} />
-        ) : moduleId === "services" ? (
-          <ServiceProvisionFields badges={readState.badges} defaultContextId={snapshotContextId} />
-        ) : moduleId === "keys" ? (
-          <KeyMutationFields keys={readState.keys} principals={readState.principals} />
-        ) : (
-          <ContextMutationFields contexts={readState.contexts} />
-        )}
-        <div className="button-row">
-          <button className="button" type="submit" disabled={mutationState.status === "submitting"}>
-            Submit Action
-          </button>
+      {disabledReason ? (
+        <div className="state-notice state-notice--warning">
+          <div className="state-notice__title">Management actions are unavailable.</div>
+          <div className="state-notice__body">{disabledReason}</div>
         </div>
-      </form>
+      ) : (
+        <form className="authority-form" onSubmit={submit}>
+          {moduleId === "accounts" ? (
+            <AccountMutationFields defaultDomainId={snapshotContextId} />
+          ) : moduleId === "auth-methods" ? (
+            <AuthMethodMutationFields accounts={readState.accounts} defaultDomainId={snapshotContextId} />
+          ) : moduleId === "identities" ? (
+            <IdentityMutationFields accounts={readState.accounts} contexts={readState.contexts} defaultContextId={snapshotContextId} />
+          ) : moduleId === "principals" ? (
+            <PrincipalMutationFields principals={readState.principals} defaultContextId={snapshotContextId} />
+          ) : moduleId === "badges" ? (
+            <BadgeMutationFields badges={readState.badges} contexts={readState.contexts} defaultContextId={snapshotContextId} />
+          ) : moduleId === "grants" ? (
+            <GrantMutationFields badges={readState.badges} identities={readState.identities} principals={readState.principals} defaultContextId={snapshotContextId} />
+          ) : moduleId === "services" ? (
+            <ServiceProvisionFields badges={readState.badges} defaultContextId={snapshotContextId} />
+          ) : moduleId === "keys" ? (
+            <KeyMutationFields keys={readState.keys} principals={readState.principals} />
+          ) : (
+            <ContextMutationFields contexts={readState.contexts} />
+          )}
+          <div className="button-row">
+            <button className="button" type="submit" disabled={mutationState.status === "submitting"}>
+              {mutationSubmitLabel(moduleId)}
+            </button>
+          </div>
+        </form>
+      )}
       <div className={`state-notice ${mutationState.status === "accepted" ? "state-notice--success" : mutationState.status === "idle" ? "" : mutationState.status === "submitting" ? "state-notice--loading" : "state-notice--error"}`}>
         <div className="state-notice__title">Action Result</div>
         <div className="state-notice__body">
@@ -1869,24 +1894,24 @@ function ContextMutationFields({ contexts }: { contexts: ContextReadModel[] }) {
   return (
     <div className="authority-form__grid">
       <label>
-        Mode
+        Action
         <select name="context_command" required defaultValue="context.create">
-          <option value="context.create">create</option>
-          <option value="context.update">update</option>
+          <option value="context.create">Create new context</option>
+          <option value="context.update">Rename existing context</option>
         </select>
       </label>
       <label>
-        Name
-        <input name="name" required />
+        Context name
+        <input name="name" required placeholder="Example: Goldmine Dezine" />
       </label>
       <label>
-        Context ID (required for update, optional for create)
-        <input name="context_id" />
+        Existing context ID
+        <input name="context_id" placeholder="Only needed when renaming a context" />
       </label>
       <label>
-        Parent Context
+        Place under
         <select name="parent_id" defaultValue="">
-          <option value="">No parent</option>
+          <option value="">No parent / top-level context</option>
           {contexts.map((context) => (
             <option value={context.id} key={context.id}>{context.name || context.id}</option>
           ))}
@@ -2382,7 +2407,7 @@ function mutationTitle(moduleId: string) {
     case "principals":
       return "Create Durable Principal";
     case "contexts":
-      return "Create Or Update Context";
+      return "New Or Edit Context";
     case "badges":
       return "Create, Update, Or Archive Badge";
     case "grants":
@@ -2393,6 +2418,40 @@ function mutationTitle(moduleId: string) {
       return "Register, Revoke, Or Rotate Principal Key";
     default:
       return "Controlled Mutation";
+  }
+}
+
+function mutationDescription(moduleId: string) {
+  switch (moduleId) {
+    case "contexts":
+      return "Create a child context under one you can manage, or rename an existing visible context. Raw IDs stay secondary.";
+    case "badges":
+      return "Create or archive context-bound badge labels. Badges remain scoped to the context where they are defined.";
+    case "grants":
+      return "Grant or revoke a badge for a specific principal inside the selected context scope.";
+    case "services":
+      return "Provision a service binding and service-held public key for the current context lane.";
+    case "keys":
+      return "Register, revoke, or rotate principal key records without exposing private key material.";
+    default:
+      return "Submit a controlled authority change through the current Sentry-backed action path.";
+  }
+}
+
+function mutationSubmitLabel(moduleId: string) {
+  switch (moduleId) {
+    case "contexts":
+      return "Save Context";
+    case "badges":
+      return "Save Badge";
+    case "grants":
+      return "Save Grant";
+    case "services":
+      return "Provision Service";
+    case "keys":
+      return "Save Key";
+    default:
+      return "Submit Action";
   }
 }
 
@@ -3096,13 +3155,17 @@ function ContextManagerReadSurface({
   identities,
   badges,
   grants,
+  activeContextId,
 }: {
   state: ResourceInterfaceState;
   contexts: ContextReadModel[];
   identities: IdentityReadModel[];
   badges: BadgeDefinitionReadModel[];
   grants: PrincipalBadgeGrantReadModel[];
+  activeContextId?: string;
 }) {
+  const [query, setQuery] = useState("");
+  const [selectedContextId, setSelectedContextId] = useState<string>();
   const sortedContexts = [...contexts].sort((left, right) => {
     const depthDelta = (left.depth ?? 0) - (right.depth ?? 0);
     if (depthDelta !== 0) {
@@ -3120,111 +3183,240 @@ function ContextManagerReadSurface({
     grants.filter((grant) => grant.inherited && !grant.revoked_at),
     (grant) => grant.effective_context_id ?? grant.context_id,
   );
-  const records: ResourceRecordSummary[] = sortedContexts.map((context) => {
+  const visibleContexts = sortedContexts.filter((context) => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) {
+      return true;
+    }
+    return [
+      context.name,
+      context.parent_name,
+      context.id,
+      context.parent_id,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(normalized);
+  });
+  const activeContext = sortedContexts.find((context) => context.id === activeContextId);
+  const selectedContext =
+    sortedContexts.find((context) => context.id === selectedContextId) ?? activeContext ?? sortedContexts[0];
+  const contextChildren = selectedContext
+    ? sortedContexts.filter((context) => context.parent_id === selectedContext.id)
+    : [];
+
+  function contextCounts(context: ContextReadModel) {
     const identityCount = identitiesByContext.get(context.id) ?? 0;
     const badgeCount = badgesByContext.get(context.id) ?? 0;
     const directGrantCount = directGrantsByContext.get(context.id) ?? 0;
     const inheritedGrantCount = inheritedGrantsByContext.get(context.id) ?? 0;
-    const isRoot = !context.parent_id;
-    return {
-      id: context.id,
-      title: context.name || context.id,
-      subtitle: `parent:${context.parent_name ?? context.parent_id ?? "root"} · depth:${context.depth ?? 0}`,
-      status: isRoot ? "root" : "child",
-      statusTone: isRoot ? "success" : "neutral",
-      tags: [
-        `depth:${context.depth ?? 0}`,
-        `children:${context.child_count ?? 0}`,
-        `identities:${identityCount}`,
-        `badges:${badgeCount}`,
-      ],
-      fields: [
-        { label: "Parent", value: context.parent_name ?? context.parent_id ?? "root" },
-        { label: "Depth", value: context.depth ?? 0 },
-        { label: "Children", value: context.child_count ?? 0 },
-        { label: "Identities", value: identityCount },
-        { label: "Badges", value: badgeCount },
-        { label: "Direct Grants", value: directGrantCount },
-        { label: "Inherited Grants", value: inheritedGrantCount },
-      ],
-      relationships: [
-        {
-          label: "Parent context",
-          value: context.parent_name ?? context.parent_id ?? "root",
-          detail: context.parent_id
-            ? "This context inherits downward-scoped posture from ancestors during evaluation."
-            : "Root contexts are top-level authority boundaries for their tree.",
-          tone: isRoot ? "success" : "neutral",
-        },
-        {
-          label: "Grant evaluation",
-          value: `${directGrantCount} direct / ${inheritedGrantCount} inherited`,
-          detail: "Inherited grants are read/evaluation-time posture, not copied authority records.",
-          tone: inheritedGrantCount ? "warning" : "neutral",
-        },
-      ],
-      raw: context,
-    };
-  });
-  const columns: ResourceListColumn[] = [
-    {
-      id: "name",
-      label: "Name",
-      render: (record) => record.title,
-      sortValue: (record) => record.title,
-      searchValue: (record) => `${record.title} ${record.subtitle ?? ""}`,
-    },
-    {
-      id: "depth",
-      label: "Depth",
-      render: (record) => record.fields?.find((field) => field.label === "Depth")?.value ?? 0,
-      sortValue: (record) => Number(record.fields?.find((field) => field.label === "Depth")?.value ?? 0),
-      searchValue: (record) => String(record.fields?.find((field) => field.label === "Depth")?.value ?? 0),
-    },
-    {
-      id: "parent",
-      label: "Parent",
-      render: (record) => record.fields?.find((field) => field.label === "Parent")?.value ?? "root",
-      sortValue: (record) => String(record.fields?.find((field) => field.label === "Parent")?.value ?? "root"),
-      searchValue: (record) => String(record.fields?.find((field) => field.label === "Parent")?.value ?? "root"),
-    },
-    {
-      id: "counts",
-      label: "Counts",
-      render: (record) => record.tags?.join(" · ") ?? "none",
-      sortValue: (record) => record.tags?.join(" ") ?? "",
-      searchValue: (record) => record.tags?.join(" ") ?? "",
-    },
-    {
-      id: "id",
-      label: "ID",
-      render: (record) => <span className="resource-list__id">{record.id}</span>,
-      sortValue: (record) => record.id,
-      searchValue: (record) => record.id,
-    },
-  ];
+    return { identityCount, badgeCount, directGrantCount, inheritedGrantCount };
+  }
+
+  if (!contexts.length) {
+    return (
+      <div className="context-manager">
+        <Panel
+          eyebrow="My Contexts"
+          title="No contexts are visible"
+          description={state.detail}
+          actions={<StatusPill tone={statusTone(state.status)} label={state.status} />}
+        >
+          <div className="empty-state">
+            Once this identity can see or manage a context, it will appear here. Other contexts remain hidden.
+          </div>
+        </Panel>
+      </div>
+    );
+  }
 
   return (
-    <ResourceInterfaceShell
-      eyebrow="Contexts"
-      title="Context Resource Interface"
-      summary="Context hierarchy, scoped authority boundaries, and read/evaluation-time inherited grant posture."
-      state={state}
-      records={records}
-      listColumns={columns}
-      showHeader={false}
-      createSlot={
-        <div className="empty-state">
-          Context create controls remain in the controlled mutation panel until the resource create form is converted.
+    <div className="context-manager">
+      <Panel
+        eyebrow="My Contexts"
+        title={`${visibleContexts.length} visible context${visibleContexts.length === 1 ? "" : "s"}`}
+        description="These are the contexts visible to the active session scope. Other contexts are intentionally not shown here."
+        actions={<StatusPill tone={statusTone(state.status)} label={state.status} />}
+      >
+        <div className="context-manager__toolbar">
+          <label className="resource-list-controls__search">
+            Find context
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.currentTarget.value)}
+              placeholder="Search visible contexts"
+              type="search"
+            />
+          </label>
+          {activeContext ? (
+            <div className="context-manager__active">
+              <span>Current context</span>
+              <strong>{activeContext.name || shortId(activeContext.id)}</strong>
+            </div>
+          ) : null}
         </div>
-      }
-      editSlot={
-        <div className="empty-state">
-          Context edit controls remain in the controlled mutation panel for this pass.
+
+        <div className="context-card-list">
+          {visibleContexts.map((context) => {
+            const { identityCount, badgeCount, directGrantCount, inheritedGrantCount } = contextCounts(context);
+            const selected = selectedContext?.id === context.id;
+            const active = activeContextId === context.id;
+            return (
+              <button
+                className={`context-card${selected ? " context-card--selected" : ""}${active ? " context-card--active" : ""}`}
+                key={context.id}
+                onClick={() => setSelectedContextId(context.id)}
+                type="button"
+              >
+                <span className="context-card__main">
+                  <span className="context-card__title">{context.name || "Untitled context"}</span>
+                  <span className="context-card__path">
+                    {context.parent_name ?? (context.parent_id ? `Parent ${shortId(context.parent_id)}` : "Top-level context")}
+                  </span>
+                </span>
+                <span className="context-card__meta">
+                  {active ? <StatusPill tone="success" label="current" /> : null}
+                  <StatusPill tone={context.parent_id ? "neutral" : "success"} label={context.parent_id ? "child" : "root"} />
+                </span>
+                <span className="context-card__stats">
+                  <span>{identityCount} identities</span>
+                  <span>{badgeCount} badges</span>
+                  <span>{directGrantCount + inheritedGrantCount} grants</span>
+                  <span>{context.child_count ?? 0} children</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
-      }
-    />
+      </Panel>
+
+      <Panel
+        eyebrow="Selected Context"
+        title={selectedContext?.name || "No context selected"}
+        description="Use this view to understand where the context sits and what authority objects are visible inside it."
+        actions={
+          selectedContext ? (
+            <StatusPill
+              tone={selectedContext.id === activeContextId ? "success" : "neutral"}
+              label={selectedContext.id === activeContextId ? "current" : "visible"}
+            />
+          ) : undefined
+        }
+      >
+        {selectedContext ? (
+          <ContextDetailView
+            context={selectedContext}
+            children={contextChildren}
+            counts={contextCounts(selectedContext)}
+            activeContextId={activeContextId}
+          />
+        ) : (
+          <div className="empty-state">Select a visible context to inspect it.</div>
+        )}
+      </Panel>
+    </div>
   );
+}
+
+function ContextDetailView({
+  context,
+  children,
+  counts,
+  activeContextId,
+}: {
+  context: ContextReadModel;
+  children: ContextReadModel[];
+  counts: {
+    identityCount: number;
+    badgeCount: number;
+    directGrantCount: number;
+    inheritedGrantCount: number;
+  };
+  activeContextId?: string;
+}) {
+  const isRoot = !context.parent_id;
+  return (
+    <div className="stack">
+      <div className="context-detail-hero">
+        <div>
+          <div className="context-detail-hero__label">
+            {context.id === activeContextId ? "Active operating context" : "Visible context"}
+          </div>
+          <div className="context-detail-hero__title">{context.name || "Untitled context"}</div>
+          <div className="context-detail-hero__body">
+            {isRoot
+              ? "This is a top-level context boundary."
+              : `Child context under ${context.parent_name ?? shortId(context.parent_id ?? "")}.`}
+          </div>
+        </div>
+        <StatusPill tone={isRoot ? "success" : "neutral"} label={isRoot ? "root" : "child"} />
+      </div>
+
+      <div className="context-stat-grid">
+        <div className="context-stat">
+          <span>Identities</span>
+          <strong>{counts.identityCount}</strong>
+        </div>
+        <div className="context-stat">
+          <span>Badges</span>
+          <strong>{counts.badgeCount}</strong>
+        </div>
+        <div className="context-stat">
+          <span>Direct grants</span>
+          <strong>{counts.directGrantCount}</strong>
+        </div>
+        <div className="context-stat">
+          <span>Inherited grants</span>
+          <strong>{counts.inheritedGrantCount}</strong>
+        </div>
+      </div>
+
+      <div className="context-section">
+        <div className="context-section__title">Hierarchy</div>
+        <div className="context-hierarchy">
+          <div className="context-hierarchy__node">
+            <span>Parent</span>
+            <strong>{context.parent_name ?? (context.parent_id ? shortId(context.parent_id) : "No parent")}</strong>
+          </div>
+          <div className="context-hierarchy__node context-hierarchy__node--current">
+            <span>This context</span>
+            <strong>{context.name || shortId(context.id)}</strong>
+          </div>
+          <div className="context-hierarchy__node">
+            <span>Children</span>
+            <strong>{children.length ? children.map((child) => child.name || shortId(child.id)).join(", ") : "None visible"}</strong>
+          </div>
+        </div>
+      </div>
+
+      <details className="advanced-details">
+        <summary>Advanced details</summary>
+        <div className="kv-grid">
+          <div className="kv">
+            <div className="kv__label">Context ID</div>
+            <div className="kv__value">{context.id}</div>
+          </div>
+          <div className="kv">
+            <div className="kv__label">Parent ID</div>
+            <div className="kv__value">{context.parent_id ?? "none"}</div>
+          </div>
+          <div className="kv">
+            <div className="kv__label">Depth</div>
+            <div className="kv__value">{context.depth ?? 0}</div>
+          </div>
+          <div className="kv">
+            <div className="kv__label">Visible children</div>
+            <div className="kv__value">{context.child_count ?? 0}</div>
+          </div>
+        </div>
+      </details>
+    </div>
+  );
+}
+
+function shortId(value: string) {
+  return value ? `${value.slice(0, 8)}...${value.slice(-4)}` : "unknown";
 }
 
 function countBy<T>(values: T[], keyFor: (value: T) => string | undefined) {
