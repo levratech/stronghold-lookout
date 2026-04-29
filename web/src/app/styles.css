@@ -538,6 +538,39 @@ button {
   word-break: break-word;
 }
 
+.operator-menu__links {
+  display: grid;
+  gap: 8px;
+}
+
+.operator-menu__link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(130, 161, 184, 0.14);
+  background: rgba(255, 255, 255, 0.028);
+  color: var(--text-strong);
+  font-weight: 580;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+
+.operator-menu__link:hover {
+  border-color: rgba(109, 198, 182, 0.24);
+  background: rgba(109, 198, 182, 0.08);
+}
+
+.operator-menu__link small {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 520;
+  white-space: nowrap;
+}
+
 .operator-menu__actions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { lookoutEnvironment } from "../env";
 import { lookoutModules, type LookoutModuleDefinition, type LookoutModuleId } from "./module-registry";
 import { useSession } from "../lib/session/SessionProvider";
@@ -8,9 +8,19 @@ import { StatusPill } from "../components/ui/StatusPill";
 import { readContexts, readIdentities } from "../lib/authority/authority-client";
 import type { ContextReadModel } from "../lib/authority/authority-types";
 
-const manageModuleIds: LookoutModuleId[] = ["contexts", "identities", "badges", "grants", "services"];
-const securityModuleIds: LookoutModuleId[] = ["keys", "transport", "audit"];
-const debugModuleIds: LookoutModuleId[] = ["overview", "resource-interface", "sentry", "aegis"];
+const manageModuleIds: LookoutModuleId[] = ["contexts", "badges", "providers"];
+const accountModuleIds: LookoutModuleId[] = ["accounts", "auth-methods", "identities", "keys"];
+const debugModuleIds: LookoutModuleId[] = [
+  "overview",
+  "resource-interface",
+  "principals",
+  "grants",
+  "services",
+  "transport",
+  "audit",
+  "sentry",
+  "aegis",
+];
 
 interface WorkspaceContextState {
   status: "idle" | "loading" | "ready" | "error";
@@ -69,7 +79,7 @@ export function ShellLayout() {
     lookoutModules.find((module) => module.route === "/");
   const moduleById = new Map(lookoutModules.map((module) => [module.id, module]));
   const manageModules = manageModuleIds.map((moduleId) => moduleById.get(moduleId)).filter(isLookoutModule);
-  const securityModules = securityModuleIds.map((moduleId) => moduleById.get(moduleId)).filter(isLookoutModule);
+  const accountModules = accountModuleIds.map((moduleId) => moduleById.get(moduleId)).filter(isLookoutModule);
   const debugModules = debugModuleIds.map((moduleId) => moduleById.get(moduleId)).filter(isLookoutModule);
   const activeAccountId = activePrincipal?.accountId ?? snapshot.account?.accountId ?? root?.accountId ?? "";
   const [workspaceContexts, setWorkspaceContexts] = useState<WorkspaceContextState>({
@@ -177,7 +187,7 @@ export function ShellLayout() {
             <div className="topbar__eyebrow">{lookoutEnvironment.estateName}</div>
             <div className="topbar__name">{lookoutEnvironment.cockpitName}</div>
             <div className="topbar__subtitle">
-              Same-origin operator cockpit for Sentry authority and Aegis edge visibility.
+              Same-origin control surface for spaces, access, domains, and authority diagnostics.
             </div>
           </div>
         </div>
@@ -214,6 +224,15 @@ export function ShellLayout() {
                 </div>
                 <div className="operator-menu__primary">{nats.connectedServer ?? lookoutEnvironment.natsPath}</div>
                 <div className="operator-menu__muted">{nats.detail}</div>
+              </div>
+
+              <div className="operator-menu__links" aria-label="Account tools">
+                {accountModules.map((module) => (
+                  <NavLink key={module.id} to={module.route} className="operator-menu__link">
+                    <span>{module.navLabel}</span>
+                    <small>{module.id === "keys" ? "Level 3 signing" : module.surfaceLabel}</small>
+                  </NavLink>
+                ))}
               </div>
 
               <div className="operator-menu__actions">
@@ -271,7 +290,7 @@ export function ShellLayout() {
               </div>
 
               <div className="workspace-nav">
-                <div className="workspace-nav__label">Contexts</div>
+                <div className="workspace-nav__label">Spaces</div>
                 {workspaceContexts.topLevelContexts.length ? (
                   <div className="workspace-nav__contexts">
                     {workspaceContexts.topLevelContexts.map((context) => (
@@ -284,7 +303,7 @@ export function ShellLayout() {
                         <div className="nav-link__text">
                           <div className="nav-link__title">{context.name || "Untitled context"}</div>
                           <div className="nav-link__description">
-                            {context.child_count ? `${context.child_count} sub-contexts` : "Top-level context"}
+                            {context.child_count ? `${context.child_count} child spaces` : "Top-level space"}
                           </div>
                         </div>
                       </NavLink>
@@ -296,7 +315,7 @@ export function ShellLayout() {
                       ? "Loading contexts..."
                       : workspaceContexts.status === "error"
                         ? "Unable to load contexts."
-                        : "No top-level contexts visible."}
+                      : "No top-level spaces visible."}
                   </div>
                 )}
               </div>
@@ -319,26 +338,8 @@ export function ShellLayout() {
                 </div>
               </div>
 
-              <div className="workspace-nav workspace-nav--manage">
-                <div className="workspace-nav__label">Security</div>
-                <div className="workspace-nav__manage">
-                  {securityModules.map((module) => (
-                    <NavLink
-                      key={module.id}
-                      to={module.route}
-                      className={({ isActive }) => `nav-link nav-link--compact${isActive ? " nav-link--active" : ""}`}
-                    >
-                      <div className="nav-link__icon">{module.icon}</div>
-                      <div className="nav-link__text">
-                        <div className="nav-link__title">{module.navLabel}</div>
-                      </div>
-                    </NavLink>
-                  ))}
-                </div>
-              </div>
-
               <details className="workspace-nav workspace-nav--debug">
-                <summary className="workspace-nav__label workspace-nav__label--summary">Debug</summary>
+                <summary className="workspace-nav__label workspace-nav__label--summary">Diagnostics</summary>
                 <div className="workspace-nav__manage">
                   {debugModules.map((module) => (
                     <NavLink

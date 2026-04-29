@@ -289,23 +289,23 @@ function natsTone(status: string) {
 function liveSurfaceLabel(moduleId: string) {
   switch (moduleId) {
     case "accounts":
-      return "Account Inventory";
+      return "Account";
     case "auth-methods":
       return "Authentication Methods";
     case "identities":
-      return "Identity Lineage";
+      return "People And Identities";
     case "contexts":
-      return "Context Tree";
+      return "Spaces";
     case "badges":
-      return "Badge Catalog";
+      return "Access Labels";
     case "principals":
-      return "Principal Lineage";
+      return "Principal Diagnostics";
     case "grants":
-      return "Badge Grants";
+      return "Access Assignment Diagnostics";
     case "services":
-      return "Service Bindings";
+      return "Service Binding Diagnostics";
     case "providers":
-      return "White-Label Interfaces";
+      return "Portals And Domains";
     case "keys":
       return "Key Posture";
     case "audit":
@@ -568,8 +568,8 @@ export function AuthorityPlaceholderPage() {
           setReadState({
             status: contexts.items.length ? "ready" : "empty",
             detail: contexts.items.length
-              ? `Contexts loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
-              : "No contexts were returned for this session scope.",
+              ? `Spaces loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
+              : "No spaces were returned for this session scope.",
             accounts: [],
             authMethods: [],
             contexts: contexts.items,
@@ -2807,13 +2807,13 @@ function mutationTitle(moduleId: string, contextMode?: "create" | "edit" | "arch
       return "Create Durable Principal";
     case "contexts":
       if (contextMode === "archive") {
-        return "Archive Context";
+        return "Archive Space";
       }
-      return "New Or Edit Context";
+      return "New Or Edit Space";
     case "badges":
-      return "Create, Update, Or Archive Badge";
+      return "Create, Update, Or Archive Access Label";
     case "grants":
-      return "Grant Or Revoke Badge Permission";
+      return "Assign Or Revoke Access";
     case "services":
       return "Provision Context Service";
     case "providers":
@@ -2829,13 +2829,13 @@ function mutationDescription(moduleId: string, contextMode?: "create" | "edit" |
   switch (moduleId) {
     case "contexts":
       if (contextMode === "archive") {
-        return "Soft-archive an organization context after its children have been handled. Nothing is hard-deleted.";
+        return "Soft-archive an organization space after its children have been handled. Nothing is hard-deleted.";
       }
-      return "Create a child context under one you can manage, or rename an existing visible context. Raw IDs stay secondary.";
+      return "Create a child space under one you can manage, or rename an existing visible space. Raw IDs stay secondary.";
     case "badges":
-      return "Create or archive context-bound badge labels. Badges remain scoped to the context where they are defined.";
+      return "Create or archive space-bound access labels. Badges remain the underlying authority definition and stay scoped to the space where they are defined.";
     case "grants":
-      return "Grant or revoke a badge for a specific principal inside the selected context scope.";
+      return "Assign or revoke an access label for a specific identity/principal inside the selected space scope.";
     case "services":
       return "Provision a service binding and service-held public key for the current context lane.";
     case "providers":
@@ -2851,13 +2851,13 @@ function mutationSubmitLabel(moduleId: string, contextMode?: "create" | "edit" |
   switch (moduleId) {
     case "contexts":
       if (contextMode === "archive") {
-        return "Archive Context";
+        return "Archive Space";
       }
-      return "Save Context";
+      return "Save Space";
     case "badges":
-      return "Save Badge";
+      return "Save Access Label";
     case "grants":
-      return "Save Grant";
+      return "Save Assignment";
     case "services":
       return "Provision Service";
     case "providers":
@@ -3116,9 +3116,9 @@ function PrincipalList({
 
   return (
     <ResourceInterfaceShell
-      eyebrow="Principals"
-      title="Principal Resource Interface"
-      summary="Human, service, agent, and ephemeral execution principals with provenance separated from permission grants."
+      eyebrow="Diagnostics"
+      title="Principal Diagnostics"
+      summary="Raw human, service, agent, and ephemeral execution principals with provenance separated from access assignments."
       state={state}
       records={records}
       listColumns={columns}
@@ -3260,9 +3260,9 @@ function GrantList({
 
   return (
     <ResourceInterfaceShell
-      eyebrow="Grants"
-      title="Grant Resource Interface"
-      summary="Identity-facing badge grants with direct/subtree scope posture and inherited evaluation visibility."
+      eyebrow="Diagnostics"
+      title="Access Assignment Diagnostics"
+      summary="Raw identity-facing access assignments with direct/subtree scope posture and inherited evaluation visibility."
       state={state}
       records={records}
       listColumns={columns}
@@ -3391,8 +3391,8 @@ function ServiceBindingList({
 
   return (
     <ResourceInterfaceShell
-      eyebrow="Services"
-      title="Service Resource Interface"
+      eyebrow="Diagnostics"
+      title="Service Binding Diagnostics"
       summary="Shared service definitions and context service bindings with badge-scoped permission lane posture."
       state={state}
       records={records}
@@ -3540,9 +3540,9 @@ function WhiteLabelInterfaceManager({
 
   return (
     <ResourceInterfaceShell
-      eyebrow="White-Label Interfaces"
-      title="Interface And Domain Manager"
-      summary="Organization-owned interface posture, domain bindings, and redacted auth-provider configuration. Personal Home contexts do not show domain authority controls here."
+      eyebrow="Portals"
+      title="Portals And Domains"
+      summary="Organization-owned portal posture, domain bindings, and redacted auth-provider configuration. Personal Home spaces do not show domain authority controls here."
       state={state}
       records={[...records, ...domainRecords]}
       listColumns={columns}
@@ -3823,8 +3823,8 @@ function ContextManagerReadSurface({
     return (
       <div className="context-manager">
         <Panel
-          eyebrow="My Contexts"
-          title="No contexts are visible"
+          eyebrow="My Spaces"
+          title="No spaces are visible"
           description={state.detail}
           actions={
             <div className="resource-view-actions">
@@ -3841,7 +3841,7 @@ function ContextManagerReadSurface({
             contextMutationSlot
           ) : (
             <div className="empty-state">
-              Once this identity can see or manage a context, it will appear here. Other contexts remain hidden.
+              Once this identity can see or manage a space, it will appear here. Other spaces remain hidden.
             </div>
           )}
         </Panel>
@@ -3857,17 +3857,17 @@ function ContextManagerReadSurface({
           eyebrow={modeLabel}
           title={
             mode === "create"
-              ? "Create Context"
+              ? "Create Space"
               : mode === "edit"
-                ? `Edit ${selectedContext?.name || "Context"}`
-                : `Archive ${selectedContext?.name || "Context"}`
+                ? `Edit ${selectedContext?.name || "Space"}`
+                : `Archive ${selectedContext?.name || "Space"}`
           }
           description={
             mode === "create"
-              ? "Create a new context from a dedicated form instead of mixing creation into the list."
+              ? "Create a new space from a dedicated form instead of mixing creation into the list."
               : mode === "edit"
-                ? "Update the selected context from a dedicated form."
-                : "Archive the selected organization context without hard-deleting authority history."
+                ? "Update the selected space from a dedicated form."
+                : "Archive the selected organization space without hard-deleting authority history."
           }
           actions={
             <button className="button button--ghost" type="button" onClick={() => setMode(mode === "create" ? "list" : "detail")}>
@@ -3877,7 +3877,7 @@ function ContextManagerReadSurface({
         >
           {contextMutationSlot ?? (
             <div className="empty-state">
-              Context create and edit controls are not mounted yet.
+              Space create and edit controls are not mounted yet.
             </div>
           )}
         </Panel>
@@ -3897,9 +3897,9 @@ function ContextManagerReadSurface({
     return (
       <div className="context-manager">
         <Panel
-          eyebrow="Selected Context"
-          title={selectedContext?.name || "No context selected"}
-          description="Use this view to understand where the context sits and what authority objects are visible inside it."
+          eyebrow="Selected Space"
+          title={selectedContext?.name || "No space selected"}
+          description="Use this view to understand where the space sits and what authority objects are visible inside it."
           actions={
             <div className="resource-view-actions">
               <button className="button button--ghost" type="button" onClick={() => setMode("list")}>
@@ -3938,7 +3938,7 @@ function ContextManagerReadSurface({
               activeContextId={activeContextId}
             />
           ) : (
-            <div className="empty-state">Select a visible context to inspect it.</div>
+            <div className="empty-state">Select a visible space to inspect it.</div>
           )}
         </Panel>
       </div>
@@ -3948,9 +3948,9 @@ function ContextManagerReadSurface({
   return (
     <div className="context-manager">
       <Panel
-        eyebrow="My Contexts"
-        title={`${visibleContexts.length} visible context${visibleContexts.length === 1 ? "" : "s"}`}
-        description="These are the contexts visible to the active session scope. Other contexts are intentionally not shown here."
+        eyebrow="My Spaces"
+        title={`${visibleContexts.length} visible space${visibleContexts.length === 1 ? "" : "s"}`}
+        description="These are the spaces visible to the active session scope. Other spaces are intentionally not shown here."
         actions={
           <div className="resource-view-actions">
             <StatusPill tone={statusTone(state.status)} label={state.status} />
@@ -3964,17 +3964,17 @@ function ContextManagerReadSurface({
       >
         <div className="context-manager__toolbar">
           <label className="resource-list-controls__search">
-            Find context
+            Find space
             <input
               value={query}
               onChange={(event) => setQuery(event.currentTarget.value)}
-              placeholder="Search visible contexts"
+              placeholder="Search visible spaces"
               type="search"
             />
           </label>
           {activeContext ? (
             <div className="context-manager__active">
-              <span>Current context</span>
+              <span>Current space</span>
               <strong>{activeContext.name || shortId(activeContext.id)}</strong>
             </div>
           ) : null}
@@ -3998,7 +3998,7 @@ function ContextManagerReadSurface({
                 <span className="context-card__main">
                   <span className="context-card__title">{context.name || "Untitled context"}</span>
                   <span className="context-card__path">
-                    {context.parent_name ?? (context.parent_id ? `Parent ${shortId(context.parent_id)}` : "Top-level context")}
+                    {context.parent_name ?? (context.parent_id ? `Parent ${shortId(context.parent_id)}` : "Top-level space")}
                   </span>
                 </span>
                 <span className="context-card__meta">
@@ -4007,8 +4007,8 @@ function ContextManagerReadSurface({
                 </span>
                 <span className="context-card__stats">
                   <span>{identityCount} identities</span>
-                  <span>{badgeCount} badges</span>
-                  <span>{directGrantCount + inheritedGrantCount} grants</span>
+                  <span>{badgeCount} access labels</span>
+                  <span>{directGrantCount + inheritedGrantCount} assignments</span>
                   <span>{context.child_count ?? 0} children</span>
                 </span>
               </button>
@@ -4042,13 +4042,13 @@ function ContextDetailView({
       <div className="context-detail-hero">
         <div>
           <div className="context-detail-hero__label">
-            {context.id === activeContextId ? "Active operating context" : "Visible context"}
+            {context.id === activeContextId ? "Active operating space" : "Visible space"}
           </div>
           <div className="context-detail-hero__title">{context.name || "Untitled context"}</div>
           <div className="context-detail-hero__body">
             {isRoot
-              ? "This is a top-level context boundary."
-              : `Child context under ${context.parent_name ?? shortId(context.parent_id ?? "")}.`}
+              ? "This is a top-level space boundary."
+              : `Child space under ${context.parent_name ?? shortId(context.parent_id ?? "")}.`}
           </div>
         </div>
         <StatusPill tone={isRoot ? "success" : "neutral"} label={isRoot ? "root" : "child"} />
@@ -4060,15 +4060,15 @@ function ContextDetailView({
           <strong>{counts.identityCount}</strong>
         </div>
         <div className="context-stat">
-          <span>Badges</span>
+          <span>Access labels</span>
           <strong>{counts.badgeCount}</strong>
         </div>
         <div className="context-stat">
-          <span>Direct grants</span>
+          <span>Direct assignments</span>
           <strong>{counts.directGrantCount}</strong>
         </div>
         <div className="context-stat">
-          <span>Inherited grants</span>
+          <span>Inherited assignments</span>
           <strong>{counts.inheritedGrantCount}</strong>
         </div>
       </div>
@@ -4081,7 +4081,7 @@ function ContextDetailView({
             <strong>{context.parent_name ?? (context.parent_id ? shortId(context.parent_id) : "No parent")}</strong>
           </div>
           <div className="context-hierarchy__node context-hierarchy__node--current">
-            <span>This context</span>
+            <span>This space</span>
             <strong>{context.name || shortId(context.id)}</strong>
           </div>
           <div className="context-hierarchy__node">
@@ -4095,7 +4095,7 @@ function ContextDetailView({
         <summary>Advanced details</summary>
         <div className="kv-grid">
           <div className="kv">
-            <div className="kv__label">Context ID</div>
+            <div className="kv__label">Space ID</div>
             <div className="kv__value">{context.id}</div>
           </div>
           <div className="kv">
@@ -4183,22 +4183,22 @@ function BadgeManagerSurface({
         `context:${context?.name ?? "unknown"}`,
       ],
       fields: [
-        { label: "Context", value: context?.name ?? "unknown" },
-        { label: "Context ID", value: badge.context_id },
+        { label: "Space", value: context?.name ?? "unknown" },
+        { label: "Space ID", value: badge.context_id },
         { label: "Description", value: badge.description ?? "No description" },
         { label: "Archived", value: badge.archived_at ?? "no" },
       ],
       relationships: [
         {
-          label: "Bound context",
+          label: "Bound space",
           value: context?.name ?? badge.context_id,
-          detail: "Badge definitions are owned by the context they are created under.",
+          detail: "Access labels are owned by the space where their badge definition is created.",
           tone: context ? "success" : "warning",
         },
         {
-          label: "Grant posture",
-          value: "identity-facing grants",
-          detail: "Grant screens assign badge authority to identities through their paired principals.",
+          label: "Assignment posture",
+          value: "identity-facing assignments",
+          detail: "Assignment screens attach access labels to identities through their paired principals.",
           tone: "neutral",
         },
       ],
@@ -4208,8 +4208,8 @@ function BadgeManagerSurface({
           label: archived ? "Archived" : "Archive",
           kind: "archive",
           disabled: archived,
-          confirmationLabel: "archive badge definition",
-          description: "Badge archive is handled by the controlled mutation panel until this resource action is wired.",
+          confirmationLabel: "archive access label",
+          description: "Access label archive is handled by the controlled mutation panel until this resource action is wired.",
         },
       ],
       raw: badge,
@@ -4225,10 +4225,10 @@ function BadgeManagerSurface({
     },
     {
       id: "context",
-      label: "Context",
-      render: (record) => record.fields?.find((field) => field.label === "Context")?.value ?? "unknown",
-      sortValue: (record) => String(record.fields?.find((field) => field.label === "Context")?.value ?? ""),
-      searchValue: (record) => String(record.fields?.find((field) => field.label === "Context")?.value ?? ""),
+      label: "Space",
+      render: (record) => record.fields?.find((field) => field.label === "Space")?.value ?? "unknown",
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Space")?.value ?? ""),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Space")?.value ?? ""),
     },
     {
       id: "status",
@@ -4250,21 +4250,21 @@ function BadgeManagerSurface({
 
   return (
     <ResourceInterfaceShell
-      eyebrow="Badges"
-      title="Badge Resource Interface"
-      summary="Context-scoped badge definitions with archive posture and grant-bound relationship hints."
+      eyebrow="Access"
+      title="Access Labels"
+      summary="Space-scoped access labels backed by badge definitions, archive posture, and assignment-bound relationship hints."
       state={state}
       records={records}
       listColumns={columns}
       showHeader={false}
       createSlot={mutationSlot ?? (
         <div className="empty-state">
-          Badge create/update controls remain in the controlled mutation panel until the resource create form is converted.
+          Access label create/update controls remain in the controlled mutation panel until the resource create form is converted.
         </div>
       )}
       editSlot={mutationSlot ?? (
         <div className="empty-state">
-          Badge edits and archive submissions remain in the controlled mutation panel for this pass.
+          Access label edits and archive submissions remain in the controlled mutation panel for this pass.
         </div>
       )}
     />
@@ -4442,9 +4442,9 @@ function IdentityList({
 
   return (
     <ResourceInterfaceShell
-      eyebrow="Identities"
-      title="Identity Resource Interface"
-      summary="Account-owned, context-bound identities with paired principal posture."
+      eyebrow="People"
+      title="People And Identities"
+      summary="Account-owned, space-bound identities with paired principal posture."
       state={state}
       records={records}
       listColumns={columns}
