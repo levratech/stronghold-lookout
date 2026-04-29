@@ -203,6 +203,16 @@ type ResourceMutationSlotProps = {
   mutationSlot?: ReactNode;
 };
 
+type ContextMutationControls = {
+  readState: LiveReadState;
+  snapshotContextId: string;
+  mutationState: MutationState;
+  signingOptions?: AuthorityMutationSigningOptions;
+  disabledReason?: string;
+  onState: (state: MutationState) => void;
+  onAccepted: () => void;
+};
+
 function statusTone(status: AuthorityLoadStatus) {
   switch (status) {
     case "ready":
@@ -811,6 +821,18 @@ export function AuthorityPlaceholderPage() {
       onAccepted={() => setRefreshNonce((value) => value + 1)}
     />
   ) : undefined;
+  const contextMutationControls =
+    module.id === "contexts" && isMutationSurface(module.id)
+      ? {
+          readState,
+          snapshotContextId: activePrincipal?.contextId ?? "",
+          mutationState,
+          signingOptions,
+          disabledReason: mutationDisabledReason,
+          onState: setMutationState,
+          onAccepted: () => setRefreshNonce((value) => value + 1),
+        }
+      : undefined;
   const liveReadContent =
     readState.status === "loading" || readState.status === "denied" || readState.status === "error" ? (
       <AuthorityReadNotice status={readState.status} detail={readState.detail} sessionStatus={snapshot.status} />
@@ -835,6 +857,7 @@ export function AuthorityPlaceholderPage() {
         grants={readState.grants}
         activeContextId={activeContextId}
         mutationSlot={mutationSlot}
+        mutationControls={contextMutationControls}
       />
     ) : module.id === "badges" ? (
       <BadgeManagerSurface
@@ -1129,6 +1152,8 @@ function AuthorityMutationPanel({
   mutationState,
   signingOptions,
   disabledReason,
+  contextMode,
+  selectedContext,
   onState,
   onAccepted,
 }: {
@@ -1138,6 +1163,8 @@ function AuthorityMutationPanel({
   mutationState: MutationState;
   signingOptions?: AuthorityMutationSigningOptions;
   disabledReason?: string;
+  contextMode?: "create" | "edit";
+  selectedContext?: ContextReadModel;
   onState: (state: MutationState) => void;
   onAccepted: () => void;
 }) {
@@ -1207,7 +1234,12 @@ function AuthorityMutationPanel({
           ) : moduleId === "keys" ? (
             <KeyMutationFields keys={readState.keys} principals={readState.principals} />
           ) : (
-            <ContextMutationFields contexts={readState.contexts} />
+            <ContextMutationFields
+              contexts={readState.contexts}
+              defaultParentId={snapshotContextId}
+              mode={contextMode ?? "create"}
+              selectedContext={selectedContext}
+            />
           )}
           <div className="button-row">
             <button className="button" type="submit" disabled={mutationState.status === "submitting"}>
@@ -1904,17 +1936,54 @@ function PrincipalMutationFields({
   );
 }
 
-function ContextMutationFields({ contexts }: { contexts: ContextReadModel[] }) {
+function ContextMutationFields({
+  contexts,
+  defaultParentId,
+  mode,
+  selectedContext,
+}: {
+  contexts: ContextReadModel[];
+  defaultParentId: string;
+  mode: "create" | "edit";
+  selectedContext?: ContextReadModel;
+}) {
+  if (mode === "edit" && selectedContext) {
+    return (
+      <div className="authority-form__grid">
+        <input name="context_command" type="hidden" value="context.update" />
+        <input name="context_id" type="hidden" value={selectedContext.id} />
+        <label>
+          Context name
+          <input name="name" required defaultValue={selectedContext.name} />
+        </label>
+        <label>
+          Description
+          <textarea name="description" defaultValue={selectedContext.description ?? ""} placeholder="What is this context for?" />
+        </label>
+        {selectedContext.kind === "organization" ? (
+          <label>
+            Organization domain
+            <input name="domain" defaultValue={selectedContext.domain ?? ""} placeholder="example.com" />
+          </label>
+        ) : null}
+        <div className="state-notice">
+          <div className="state-notice__title">Editing {selectedContext.kind ?? "context"} metadata</div>
+          <div className="state-notice__body">
+            The context ID is kept out of the form and submitted behind the scenes: {shortId(selectedContext.id)}.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="authority-form__grid">
       <label>
-        Action
-        <select name="context_command" required defaultValue="context.create">
-          <option value="context.create">Create new context (compatibility)</option>
+        Create as
+        <select name="context_command" required defaultValue="context.create_child">
           <option value="context.create_child">Create child context</option>
           <option value="context.create_org_root">Create organization root</option>
           <option value="context.create_personal_root">Create personal root</option>
-          <option value="context.update">Rename existing context</option>
         </select>
       </label>
       <label>
@@ -1922,18 +1991,28 @@ function ContextMutationFields({ contexts }: { contexts: ContextReadModel[] }) {
         <input name="name" required placeholder="Example: Goldmine Dezine" />
       </label>
       <label>
-        Existing context ID
-        <input name="context_id" placeholder="Only needed when renaming a context" />
+        Description
+        <textarea name="description" placeholder="What is this context for?" />
       </label>
       <label>
-        Place under
-        <select name="parent_id" defaultValue="">
-          <option value="">No parent / top-level context</option>
+        Parent for child context
+        <select name="parent_id" defaultValue={defaultParentId}>
+          <option value="">No parent: only valid for org/personal root creation</option>
           {contexts.map((context) => (
             <option value={context.id} key={context.id}>{context.name || context.id}</option>
           ))}
         </select>
       </label>
+      <label>
+        Organization domain
+        <input name="domain" placeholder="Optional, org roots only" />
+      </label>
+      <div className="state-notice">
+        <div className="state-notice__title">Create uses named operations now.</div>
+        <div className="state-notice__body">
+          Child contexts require a parent. Organization and personal roots must be created as root contexts and personal roots cannot carry a domain.
+        </div>
+      </div>
     </div>
   );
 }
@@ -2376,10 +2455,14 @@ async function submitAuthorityMutation(
   ].includes(requestedCommand)
     ? requestedCommand
     : "context.create";
+  const rawParentId = optionalTextValue(form, "parent_id");
+  const rawDomain = optionalTextValue(form, "domain");
   const payload = {
     name: textValue(form, "name"),
     context_id: optionalTextValue(form, "context_id"),
-    parent_id: optionalTextValue(form, "parent_id"),
+    parent_id: command === "context.create" || command === "context.create_child" ? rawParentId : undefined,
+    description: optionalTextValue(form, "description"),
+    domain: command === "context.create_personal_root" ? undefined : rawDomain,
   };
   if (command === "context.update") {
     return updateContext(payload, signingFor(command, signingOptions));
@@ -3195,6 +3278,7 @@ function ContextManagerReadSurface({
   grants,
   activeContextId,
   mutationSlot,
+  mutationControls,
 }: {
   state: ResourceInterfaceState;
   contexts: ContextReadModel[];
@@ -3202,6 +3286,7 @@ function ContextManagerReadSurface({
   badges: BadgeDefinitionReadModel[];
   grants: PrincipalBadgeGrantReadModel[];
   activeContextId?: string;
+  mutationControls?: ContextMutationControls;
 } & ResourceMutationSlotProps) {
   const [query, setQuery] = useState("");
   const [selectedContextId, setSelectedContextId] = useState<string>();
@@ -3254,6 +3339,24 @@ function ContextManagerReadSurface({
     return { identityCount, badgeCount, directGrantCount, inheritedGrantCount };
   }
 
+  const contextMutationSlot =
+    mutationControls ? (
+      <AuthorityMutationPanel
+        moduleId="contexts"
+        readState={mutationControls.readState}
+        snapshotContextId={mutationControls.snapshotContextId}
+        mutationState={mutationControls.mutationState}
+        signingOptions={mutationControls.signingOptions}
+        disabledReason={mutationControls.disabledReason}
+        contextMode={mode === "edit" ? "edit" : "create"}
+        selectedContext={selectedContext}
+        onState={mutationControls.onState}
+        onAccepted={mutationControls.onAccepted}
+      />
+    ) : (
+      mutationSlot
+    );
+
   if (!contexts.length) {
     return (
       <div className="context-manager">
@@ -3264,7 +3367,7 @@ function ContextManagerReadSurface({
           actions={
             <div className="resource-view-actions">
               <StatusPill tone={statusTone(state.status)} label={state.status} />
-              {mutationSlot ? (
+              {contextMutationSlot ? (
                 <button className="button" type="button" onClick={() => setMode("create")}>
                   Create
                 </button>
@@ -3272,8 +3375,8 @@ function ContextManagerReadSurface({
             </div>
           }
         >
-          {mode === "create" && mutationSlot ? (
-            mutationSlot
+          {mode === "create" && contextMutationSlot ? (
+            contextMutationSlot
           ) : (
             <div className="empty-state">
               Once this identity can see or manage a context, it will appear here. Other contexts remain hidden.
@@ -3301,7 +3404,7 @@ function ContextManagerReadSurface({
             </button>
           }
         >
-          {mutationSlot ?? (
+          {contextMutationSlot ?? (
             <div className="empty-state">
               Context create and edit controls are not mounted yet.
             </div>
@@ -3323,7 +3426,7 @@ function ContextManagerReadSurface({
               <button className="button button--ghost" type="button" onClick={() => setMode("list")}>
                 Back to list
               </button>
-              {selectedContext && mutationSlot ? (
+              {selectedContext && contextMutationSlot ? (
                 <button className="button" type="button" onClick={() => setMode("edit")}>
                   Edit
                 </button>
@@ -3361,7 +3464,7 @@ function ContextManagerReadSurface({
         actions={
           <div className="resource-view-actions">
             <StatusPill tone={statusTone(state.status)} label={state.status} />
-            {mutationSlot ? (
+            {contextMutationSlot ? (
               <button className="button" type="button" onClick={() => setMode("create")}>
                 Create
               </button>
