@@ -84,7 +84,7 @@ export function ShellLayout() {
   const activeAccountId = activePrincipal?.accountId ?? snapshot.account?.accountId ?? root?.accountId ?? "";
   const [workspaceContexts, setWorkspaceContexts] = useState<WorkspaceContextState>({
     status: "idle",
-    detail: "Context rail has not loaded yet.",
+    detail: "Space rail has not loaded yet.",
     topLevelContexts: [],
   });
 
@@ -92,7 +92,7 @@ export function ShellLayout() {
     if (snapshot.status !== "authenticated" || !activeAccountId) {
       setWorkspaceContexts({
         status: "idle",
-        detail: "Login to see your home context and accessible spaces.",
+        detail: "Login to see Home and your accessible spaces.",
         topLevelContexts: [],
       });
       return;
@@ -101,7 +101,7 @@ export function ShellLayout() {
     const controller = new AbortController();
     setWorkspaceContexts({
       status: "loading",
-      detail: "Loading your contexts.",
+      detail: "Loading your spaces.",
       topLevelContexts: [],
     });
 
@@ -141,8 +141,8 @@ export function ShellLayout() {
         setWorkspaceContexts({
           status: "ready",
           detail: contextIds.length
-            ? "Loaded contexts tied to your account identities."
-            : "No context identities are visible for this account yet.",
+            ? "Loaded spaces tied to your account identities."
+            : "No space identities are visible for this account yet.",
           personalContext,
           topLevelContexts,
         });
@@ -152,7 +152,7 @@ export function ShellLayout() {
         }
         setWorkspaceContexts({
           status: "error",
-          detail: error instanceof Error ? error.message : "Unable to load workspace contexts.",
+          detail: error instanceof Error ? error.message : "Unable to load workspace spaces.",
           topLevelContexts: [],
         });
       }
@@ -284,7 +284,7 @@ export function ShellLayout() {
                   </NavLink>
                 ) : (
                   <div className={`workspace-nav__empty workspace-nav__empty--${workspaceContexts.status}`}>
-                    {workspaceContexts.status === "loading" ? "Loading Home..." : "Home context not visible yet."}
+                    {workspaceContexts.status === "loading" ? "Loading Home..." : "Home space not visible yet."}
                   </div>
                 )}
               </div>
@@ -312,9 +312,9 @@ export function ShellLayout() {
                 ) : (
                   <div className={`workspace-nav__empty workspace-nav__empty--${workspaceContexts.status}`}>
                     {workspaceContexts.status === "loading"
-                      ? "Loading contexts..."
+                      ? "Loading spaces..."
                       : workspaceContexts.status === "error"
-                        ? "Unable to load contexts."
+                        ? "Unable to load spaces."
                       : "No top-level spaces visible."}
                   </div>
                 )}

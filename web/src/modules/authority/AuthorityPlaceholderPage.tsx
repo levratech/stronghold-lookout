@@ -593,8 +593,8 @@ export function AuthorityPlaceholderPage() {
           setReadState({
             status: response.items.length ? "ready" : "empty",
             detail: response.items.length
-              ? `Badge definitions loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
-              : "No badge definitions were returned for this session scope.",
+              ? `Access labels loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
+              : "No access labels were returned for this session scope.",
             accounts: [],
             authMethods: [],
             contexts: contexts.items,
@@ -642,8 +642,8 @@ export function AuthorityPlaceholderPage() {
           setReadState({
             status: response.items.length ? "ready" : "empty",
             detail: response.items.length
-              ? `Badge grants loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
-              : "No badge grants were returned for this session scope.",
+              ? `Access assignments loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
+              : "No access assignments were returned for this session scope.",
             accounts: [],
             authMethods: [],
             contexts: [],
@@ -4365,17 +4365,17 @@ function IdentityList({
       statusTone: durable ? "success" : "warning",
       tags: [
         identity.principal.principal_type,
-        `badges:${identity.badge_ids?.length ?? 0}`,
+        `access:${identity.badge_ids?.length ?? 0}`,
         `lineage:${identity.lineage?.length ?? 0}`,
       ],
       fields: [
         { label: "Account", value: account?.email ?? identity.account_id },
         { label: "Account ID", value: identity.account_id },
-        { label: "Context", value: context?.name ?? identity.context_id },
-        { label: "Context ID", value: identity.context_id },
+        { label: "Space", value: context?.name ?? identity.context_id },
+        { label: "Space ID", value: identity.context_id },
         { label: "Principal", value: identity.principal_id },
         { label: "Principal Type", value: identity.principal.principal_type },
-        { label: "Badges", value: identity.badge_ids?.length ?? 0 },
+        { label: "Access Labels", value: identity.badge_ids?.length ?? 0 },
       ],
       relationships: [
         {
@@ -4385,9 +4385,9 @@ function IdentityList({
           tone: account ? "success" : "warning",
         },
         {
-          label: "Context",
+          label: "Space",
           value: context?.name ?? identity.context_id,
-          detail: "Authority is scoped through this identity in this context, not across account siblings.",
+          detail: "Authority is scoped through this identity in this space, not across account siblings.",
           tone: context ? "success" : "warning",
         },
         {
@@ -4410,10 +4410,10 @@ function IdentityList({
     },
     {
       id: "context",
-      label: "Context",
-      render: (record) => record.fields?.find((field) => field.label === "Context")?.value ?? "unknown",
-      sortValue: (record) => String(record.fields?.find((field) => field.label === "Context")?.value ?? ""),
-      searchValue: (record) => String(record.fields?.find((field) => field.label === "Context")?.value ?? ""),
+      label: "Space",
+      render: (record) => record.fields?.find((field) => field.label === "Space")?.value ?? "unknown",
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Space")?.value ?? ""),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Space")?.value ?? ""),
     },
     {
       id: "principal_type",
@@ -4451,7 +4451,7 @@ function IdentityList({
       showHeader={false}
       createSlot={mutationSlot ?? (
         <div className="empty-state">
-          Identity, person subject, agent, and service creation remain in the controlled mutation panel until the resource create form is converted.
+          Person, identity, agent, and service creation remain in the controlled mutation panel until the resource create form is converted.
         </div>
       )}
       editSlot={mutationSlot ?? (
