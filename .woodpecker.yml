@@ -20,7 +20,9 @@ steps:
     commands:
       - mkdir -p dist
       - GOOS=linux GOARCH=amd64 go build -o dist/lookout-linux-amd64 ./cmd/lookout
-      - tar -czf dist/stronghold-lookout-linux-amd64.tar.gz -C dist lookout-linux-amd64
+      - mkdir -p dist/web
+      - cp -R web/dist/. dist/web/
+      - tar -czf dist/stronghold-lookout-linux-amd64.tar.gz -C dist lookout-linux-amd64 web
 
   publish-artifacts:
     image: alpine:3.20
