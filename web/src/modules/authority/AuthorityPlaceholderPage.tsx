@@ -14,25 +14,34 @@ import {
   authorityMutationRequiresSignature,
   archiveBadgeDefinition,
   archiveContext,
+  archiveDomainBinding,
+  archiveInterfaceAuthProvider,
   createAccount,
   createBadgeDefinition,
   createChildContext,
   createContext,
+  createDomainBinding,
   createDurablePrincipal,
   createIdentity,
   createOrgRootContext,
   createPersonalRootContext,
   createSubject,
+  disableDomainBinding,
+  enableDomainBinding,
   grantPrincipalBadge,
   linkAccountAuthMethod,
   provisionContextService,
   readAccounts,
   readAccountAuthMethods,
+  readAccountNamespaces,
   readAuthorityAuditEvents,
   readBadgeDefinitions,
   readBadgeGrants,
   readContexts,
+  readDomainBindings,
   readIdentities,
+  readInterfaceAuthProviders,
+  readInterfaces,
   readPrincipalKeys,
   readPrincipals,
   readServiceBindings,
@@ -43,12 +52,15 @@ import {
   revokePrincipalKey,
   rotatePrincipalKey,
   setAccountAuthMethodStatus,
+  upsertInterfaceAuthProvider,
   updateBadgeDefinition,
   updateContext,
+  verifyDomainBinding,
   type AuthorityMutationSigningOptions,
 } from "../../lib/authority/authority-client";
 import type {
   AccountAuthMethodReadModel,
+  AccountNamespaceReadModel,
   AccountReadModel,
   AuthorityAuditEventReadModel,
   AuthorityMutationCommand,
@@ -58,7 +70,10 @@ import type {
   BadgeDefinitionReadModel,
   ContextServiceBindingReadModel,
   ContextReadModel,
+  DomainBindingReadModel,
   IdentityReadModel,
+  InterfaceAuthProviderConfigReadModel,
+  InterfaceBindingReadModel,
   PrincipalBadgeGrantReadModel,
   PrincipalKeyReadModel,
   PrincipalReadModel,
@@ -181,6 +196,10 @@ type LiveReadState =
       grants: PrincipalBadgeGrantReadModel[];
       serviceDefinitions: ServiceDefinitionReadModel[];
       serviceBindings: ContextServiceBindingReadModel[];
+      accountNamespaces?: AccountNamespaceReadModel[];
+      interfaces?: InterfaceBindingReadModel[];
+      domainBindings?: DomainBindingReadModel[];
+      interfaceProviders?: InterfaceAuthProviderConfigReadModel[];
       keys: PrincipalKeyReadModel[];
       auditEvents: AuthorityAuditEventReadModel[];
     }
@@ -196,6 +215,10 @@ type LiveReadState =
       grants: PrincipalBadgeGrantReadModel[];
       serviceDefinitions: ServiceDefinitionReadModel[];
       serviceBindings: ContextServiceBindingReadModel[];
+      accountNamespaces?: AccountNamespaceReadModel[];
+      interfaces?: InterfaceBindingReadModel[];
+      domainBindings?: DomainBindingReadModel[];
+      interfaceProviders?: InterfaceAuthProviderConfigReadModel[];
       keys: PrincipalKeyReadModel[];
       auditEvents: AuthorityAuditEventReadModel[];
     };
@@ -281,6 +304,8 @@ function liveSurfaceLabel(moduleId: string) {
       return "Badge Grants";
     case "services":
       return "Service Bindings";
+    case "providers":
+      return "White-Label Interfaces";
     case "keys":
       return "Key Posture";
     case "audit":
@@ -291,11 +316,11 @@ function liveSurfaceLabel(moduleId: string) {
 }
 
 function isLiveReadSurface(moduleId: string) {
-  return ["accounts", "auth-methods", "identities", "contexts", "badges", "principals", "grants", "services", "keys", "audit"].includes(moduleId);
+  return ["accounts", "auth-methods", "identities", "contexts", "badges", "principals", "grants", "services", "providers", "keys", "audit"].includes(moduleId);
 }
 
 function isMutationSurface(moduleId: string) {
-  return ["accounts", "auth-methods", "identities", "contexts", "principals", "badges", "grants", "services", "keys"].includes(moduleId);
+  return ["accounts", "auth-methods", "identities", "contexts", "principals", "badges", "grants", "services", "providers", "keys"].includes(moduleId);
 }
 
 function isCommandSigningSurface(moduleId: string) {
@@ -661,6 +686,38 @@ export function AuthorityPlaceholderPage() {
           return;
         }
 
+        if (module?.id === "providers") {
+          const [namespaces, interfaces, domains, providers, contexts] = await Promise.all([
+            readAccountNamespaces(controller.signal, scopedFilters.context, authorityReadTransport),
+            readInterfaces(controller.signal, scopedFilters.context, authorityReadTransport),
+            readDomainBindings(controller.signal, scopedFilters.context, authorityReadTransport),
+            readInterfaceAuthProviders(controller.signal, scopedFilters.context, authorityReadTransport),
+            readContexts(controller.signal, scopedFilters.context, authorityReadTransport),
+          ]);
+          setReadState({
+            status: interfaces.items.length || domains.items.length || providers.items.length ? "ready" : "empty",
+            detail: interfaces.items.length || domains.items.length || providers.items.length
+              ? `White-label interfaces loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
+              : "No white-label interfaces, domain bindings, or provider configs were returned for this session scope.",
+            accounts: [],
+            authMethods: [],
+            contexts: contexts.items,
+            identities: [],
+            badges: [],
+            principals: [],
+            grants: [],
+            serviceDefinitions: [],
+            serviceBindings: [],
+            accountNamespaces: namespaces.items,
+            interfaces: interfaces.items,
+            domainBindings: domains.items,
+            interfaceProviders: providers.items,
+            keys: [],
+            auditEvents: [],
+          });
+          return;
+        }
+
         if (module?.id === "audit") {
           const response = await readAuthorityAuditEvents(controller.signal, scopedFilters.principalContext, authorityReadTransport);
           setReadState({
@@ -794,6 +851,7 @@ export function AuthorityPlaceholderPage() {
     "principals",
     "grants",
     "services",
+    "providers",
     "keys",
   ].includes(module.id);
   const showTransportPosturePanel = module.id === "transport";
@@ -812,6 +870,8 @@ export function AuthorityPlaceholderPage() {
           ? "No active principal is resolved for this session yet."
         : module.id === "contexts" && !signingOptions
           ? "Context lifecycle actions require a ready browser command-signing key for the active principal."
+          : module.id === "providers" && !signingOptions
+            ? "White-label interface and domain lifecycle actions require a ready browser command-signing key for the active principal."
           : undefined;
   const mutationSlot = isMutationSurface(module.id) ? (
     <AuthorityMutationPanel
@@ -891,6 +951,16 @@ export function AuthorityPlaceholderPage() {
         state={{ status: readState.status, detail: readState.detail }}
         definitions={readState.serviceDefinitions}
         bindings={readState.serviceBindings}
+        mutationSlot={mutationSlot}
+      />
+    ) : module.id === "providers" ? (
+      <WhiteLabelInterfaceManager
+        state={{ status: readState.status, detail: readState.detail }}
+        namespaces={readState.accountNamespaces ?? []}
+        interfaces={readState.interfaces ?? []}
+        domains={readState.domainBindings ?? []}
+        providers={readState.interfaceProviders ?? []}
+        contexts={readState.contexts}
         mutationSlot={mutationSlot}
       />
     ) : module.id === "audit" ? (
@@ -1236,6 +1306,12 @@ function AuthorityMutationPanel({
             <GrantMutationFields badges={readState.badges} identities={readState.identities} principals={readState.principals} defaultContextId={snapshotContextId} />
           ) : moduleId === "services" ? (
             <ServiceProvisionFields badges={readState.badges} defaultContextId={snapshotContextId} />
+          ) : moduleId === "providers" ? (
+            <ProviderMutationFields
+              interfaces={readState.interfaces ?? []}
+              domains={readState.domainBindings ?? []}
+              providers={readState.interfaceProviders ?? []}
+            />
           ) : moduleId === "keys" ? (
             <KeyMutationFields keys={readState.keys} principals={readState.principals} />
           ) : (
@@ -2271,6 +2347,133 @@ function ServiceProvisionFields({
   );
 }
 
+function ProviderMutationFields({
+  interfaces,
+  domains,
+  providers,
+}: {
+  interfaces: InterfaceBindingReadModel[];
+  domains: DomainBindingReadModel[];
+  providers: InterfaceAuthProviderConfigReadModel[];
+}) {
+  return (
+    <div className="authority-form__grid">
+      <label>
+        Action
+        <select name="provider_command" required defaultValue="domain_binding.create">
+          <option value="domain_binding.create">create domain binding</option>
+          <option value="domain_binding.verify">verify domain binding</option>
+          <option value="domain_binding.enable">enable domain binding</option>
+          <option value="domain_binding.disable">disable domain binding</option>
+          <option value="domain_binding.archive">archive domain binding</option>
+          <option value="interface_auth_provider.upsert">upsert provider config</option>
+          <option value="interface_auth_provider.archive">archive provider config</option>
+        </select>
+      </label>
+      <label>
+        Interface
+        <select name="interface_id" defaultValue="">
+          <option value="">Select interface</option>
+          {interfaces.map((iface) => (
+            <option value={iface.id} key={iface.id}>
+              {iface.display_name || iface.interface_key} ({shortId(iface.id)})
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Domain Binding
+        <select name="domain_binding_id" defaultValue="">
+          <option value="">New or select existing</option>
+          {domains.map((domain) => (
+            <option value={domain.id} key={domain.id}>
+              {domain.hostname} ({domain.status})
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Hostname
+        <input name="hostname" placeholder="ai.goldminedezine.com" />
+      </label>
+      <label>
+        Domain Kind
+        <select name="kind" defaultValue="primary">
+          <option value="primary">primary</option>
+          <option value="alias">alias</option>
+          <option value="client_subdomain">client subdomain</option>
+        </select>
+      </label>
+      <label>
+        Verification Token
+        <input name="verification_token" placeholder="Required when verifying a domain" />
+      </label>
+      <label>
+        Provider Config
+        <select name="config_id" defaultValue="">
+          <option value="">New or select existing</option>
+          {providers.map((provider) => (
+            <option value={provider.id} key={provider.id}>
+              {provider.provider} ({provider.status})
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Provider
+        <input name="provider" defaultValue="google" placeholder="google" />
+      </label>
+      <label>
+        Client ID Ref
+        <input name="client_id_ref" placeholder="secret/google/client-id" />
+      </label>
+      <label>
+        Client Secret Ref
+        <input name="client_secret_ref" placeholder="secret/google/client-secret" />
+      </label>
+      <label>
+        Auth URL Ref
+        <input name="auth_url_ref" placeholder="secret/google/auth-url" />
+      </label>
+      <label>
+        Token URL Ref
+        <input name="token_url_ref" placeholder="secret/google/token-url" />
+      </label>
+      <label>
+        Userinfo URL Ref
+        <input name="userinfo_url_ref" placeholder="secret/google/userinfo-url" />
+      </label>
+      <label>
+        Provider Status
+        <select name="status" defaultValue="">
+          <option value="">infer from refs</option>
+          <option value="active">active</option>
+          <option value="disabled">disabled</option>
+          <option value="missing_config">missing config</option>
+        </select>
+      </label>
+      <label>
+        Redirect Path
+        <input name="redirect_path" defaultValue="/_/auth/callback/google" />
+      </label>
+      <label>
+        Enrollment Policy
+        <input name="enrollment_policy" defaultValue="auto_provision" />
+      </label>
+      <label className="authority-form__wide">
+        Scopes
+        <input name="scopes" defaultValue="openid,email,profile" />
+      </label>
+      <div className="state-notice authority-form__wide">
+        <div className="state-notice__title">Private config stays private</div>
+        <div className="state-notice__body">
+          These fields store references only. Lookout never receives resolved OAuth secrets; Sentry resolves refs when compiling Aegis/Drawbridge config.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function KeyMutationFields({
   keys,
   principals,
@@ -2455,6 +2658,53 @@ async function submitAuthorityMutation(
       initial_grants: initialGrant,
     }, signingFor(command, signingOptions));
   }
+  if (moduleId === "providers") {
+    const command = textValue(form, "provider_command") as AuthorityMutationCommand;
+    if (command.startsWith("domain_binding.")) {
+      const payload = {
+        domain_binding_id: optionalTextValue(form, "domain_binding_id"),
+        interface_id: optionalTextValue(form, "interface_id"),
+        hostname: optionalTextValue(form, "hostname"),
+        kind: optionalTextValue(form, "kind"),
+        verification_token: optionalTextValue(form, "verification_token"),
+      };
+      if (command === "domain_binding.verify") {
+        return verifyDomainBinding(payload, signingFor(command, signingOptions));
+      }
+      if (command === "domain_binding.enable") {
+        return enableDomainBinding(payload, signingFor(command, signingOptions));
+      }
+      if (command === "domain_binding.disable") {
+        return disableDomainBinding(payload, signingFor(command, signingOptions));
+      }
+      if (command === "domain_binding.archive") {
+        return archiveDomainBinding(payload, signingFor(command, signingOptions));
+      }
+      return createDomainBinding(payload, signingFor("domain_binding.create", signingOptions));
+    }
+    const scopes = textValue(form, "scopes")
+      .split(/[,\n]/)
+      .map((scope) => scope.trim())
+      .filter(Boolean);
+    const payload = {
+      config_id: optionalTextValue(form, "config_id"),
+      interface_id: optionalTextValue(form, "interface_id"),
+      domain_binding_id: optionalTextValue(form, "domain_binding_id"),
+      provider: optionalTextValue(form, "provider"),
+      client_id_ref: optionalTextValue(form, "client_id_ref"),
+      client_secret_ref: optionalTextValue(form, "client_secret_ref"),
+      auth_url_ref: optionalTextValue(form, "auth_url_ref"),
+      token_url_ref: optionalTextValue(form, "token_url_ref"),
+      userinfo_url_ref: optionalTextValue(form, "userinfo_url_ref"),
+      scopes,
+      redirect_path: optionalTextValue(form, "redirect_path"),
+      enrollment_policy: optionalTextValue(form, "enrollment_policy"),
+      status: optionalTextValue(form, "status"),
+    };
+    return command === "interface_auth_provider.archive"
+      ? archiveInterfaceAuthProvider(payload, signingFor(command, signingOptions))
+      : upsertInterfaceAuthProvider(payload, signingFor("interface_auth_provider.upsert", signingOptions));
+  }
   if (moduleId === "keys") {
     const payload = {
       principal_id: textValue(form, "principal_id"),
@@ -2566,6 +2816,8 @@ function mutationTitle(moduleId: string, contextMode?: "create" | "edit" | "arch
       return "Grant Or Revoke Badge Permission";
     case "services":
       return "Provision Context Service";
+    case "providers":
+      return "Manage Interface Domains And Provider Posture";
     case "keys":
       return "Register, Revoke, Or Rotate Principal Key";
     default:
@@ -2586,6 +2838,8 @@ function mutationDescription(moduleId: string, contextMode?: "create" | "edit" |
       return "Grant or revoke a badge for a specific principal inside the selected context scope.";
     case "services":
       return "Provision a service binding and service-held public key for the current context lane.";
+    case "providers":
+      return "Create and lifecycle domain bindings, then store redacted provider config references for Sentry private materialization.";
     case "keys":
       return "Register, revoke, or rotate principal key records without exposing private key material.";
     default:
@@ -2606,6 +2860,8 @@ function mutationSubmitLabel(moduleId: string, contextMode?: "create" | "edit" |
       return "Save Grant";
     case "services":
       return "Provision Service";
+    case "providers":
+      return "Save Interface Posture";
     case "keys":
       return "Save Key";
     default:
@@ -3150,6 +3406,155 @@ function ServiceBindingList({
       editSlot={mutationSlot ?? (
         <div className="empty-state">
           Service binding lifecycle controls remain in controlled mutation work for this pass.
+        </div>
+      )}
+    />
+  );
+}
+
+function WhiteLabelInterfaceManager({
+  state,
+  namespaces,
+  interfaces,
+  domains,
+  providers,
+  contexts,
+  mutationSlot,
+}: {
+  state: ResourceInterfaceState;
+  namespaces: AccountNamespaceReadModel[];
+  interfaces: InterfaceBindingReadModel[];
+  domains: DomainBindingReadModel[];
+  providers: InterfaceAuthProviderConfigReadModel[];
+  contexts: ContextReadModel[];
+} & ResourceMutationSlotProps) {
+  const namespacesByID = new Map(namespaces.map((namespace) => [namespace.id, namespace]));
+  const contextsByID = new Map(contexts.map((context) => [context.id, context]));
+  const domainsByInterface = groupBy(domains, (domain) => domain.interface_id);
+  const providersByInterface = groupBy(providers, (provider) => provider.interface_id);
+  const records: ResourceRecordSummary[] = interfaces.map((iface) => {
+    const namespace = namespacesByID.get(iface.account_namespace_id);
+    const owningContext = contextsByID.get(iface.owning_context_id);
+    const interfaceDomains = domainsByInterface.get(iface.id) ?? [];
+    const interfaceProviders = providersByInterface.get(iface.id) ?? [];
+    const readyDomains = interfaceDomains.filter((domain) =>
+      domain.status === "enabled" && domain.verification_ready && domain.tls_ready && !domain.archived_at
+    );
+    const missingProviderConfig = interfaceProviders.some((provider) => provider.status === "missing_config");
+    const statusToneValue =
+      iface.status !== "active" || iface.archived_at
+        ? "warning"
+        : missingProviderConfig
+          ? "warning"
+          : readyDomains.length
+            ? "success"
+            : "neutral";
+    return {
+      id: iface.id,
+      title: iface.display_name || iface.interface_key,
+      subtitle: `${namespace?.name ?? iface.account_namespace_id} · ${owningContext?.name ?? iface.owning_context_id}`,
+      status: iface.archived_at ? "archived" : iface.status,
+      statusTone: statusToneValue,
+      tags: [
+        `domains:${interfaceDomains.length}`,
+        `ready:${readyDomains.length}`,
+        `providers:${interfaceProviders.length}`,
+      ],
+      fields: [
+        { label: "Interface ID", value: iface.id },
+        { label: "Interface Key", value: iface.interface_key },
+        { label: "Account Namespace", value: namespace?.name ?? iface.account_namespace_id },
+        { label: "Owning Context", value: owningContext?.name ?? iface.owning_context_id },
+        { label: "Default Login Context", value: contextsByID.get(iface.default_context_id)?.name ?? iface.default_context_id },
+        { label: "Domains", value: interfaceDomains.map((domain) => domain.hostname).join(", ") || "none" },
+        { label: "Providers", value: interfaceProviders.map((provider) => provider.provider).join(", ") || "none" },
+      ],
+      relationships: [
+        {
+          label: "Eligible route domains",
+          value: String(readyDomains.length),
+          detail: "Only enabled, verified, TLS-ready domain bindings are eligible for Sentry compiled Aegis route config.",
+          tone: readyDomains.length ? "success" : "warning",
+        },
+        {
+          label: "Provider secret posture",
+          value: missingProviderConfig ? "missing config" : interfaceProviders.length ? "redacted/ready" : "not configured",
+          detail: "Lookout sees presence only. Sentry resolves private refs when compiling Aegis/Drawbridge headers.",
+          tone: missingProviderConfig ? "warning" : interfaceProviders.length ? "success" : "neutral",
+        },
+      ],
+      raw: { iface, domains: interfaceDomains, providers: interfaceProviders },
+    };
+  });
+
+  const domainRecords: ResourceRecordSummary[] = domains
+    .filter((domain) => !interfaces.some((iface) => iface.id === domain.interface_id))
+    .map((domain) => ({
+      id: domain.id,
+      title: domain.hostname,
+      subtitle: `orphaned interface:${domain.interface_id}`,
+      status: domain.status,
+      statusTone: domain.verification_ready && domain.tls_ready && domain.status === "enabled" ? "success" : "warning",
+      tags: [`verification:${domain.verification_status}`, `tls:${domain.tls_status}`],
+      fields: [
+        { label: "Domain Binding ID", value: domain.id },
+        { label: "Interface", value: domain.interface_id },
+        { label: "Hostname", value: domain.hostname },
+        { label: "Status", value: domain.status },
+      ],
+      raw: domain,
+    }));
+
+  const columns: ResourceListColumn[] = [
+    {
+      id: "interface",
+      label: "Interface",
+      render: (record) => record.title,
+      sortValue: (record) => record.title,
+      searchValue: (record) => `${record.title} ${record.subtitle}`,
+    },
+    {
+      id: "domains",
+      label: "Domains",
+      render: (record) => record.fields?.find((field) => field.label === "Domains")?.value ?? "none",
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Domains")?.value ?? ""),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Domains")?.value ?? ""),
+    },
+    {
+      id: "status",
+      label: "Status",
+      render: (record) => (
+        <StatusPill tone={record.statusTone ?? "neutral"} label={record.status ?? "unknown"} />
+      ),
+      sortValue: (record) => record.status ?? "",
+      searchValue: (record) => record.status ?? "",
+    },
+    {
+      id: "id",
+      label: "ID",
+      render: (record) => <span className="resource-list__id">{record.id}</span>,
+      sortValue: (record) => record.id,
+      searchValue: (record) => record.id,
+    },
+  ];
+
+  return (
+    <ResourceInterfaceShell
+      eyebrow="White-Label Interfaces"
+      title="Interface And Domain Manager"
+      summary="Organization-owned interface posture, domain bindings, and redacted auth-provider configuration. Personal Home contexts do not show domain authority controls here."
+      state={state}
+      records={[...records, ...domainRecords]}
+      listColumns={columns}
+      showHeader={false}
+      createSlot={mutationSlot ?? (
+        <div className="empty-state">
+          Domain and provider changes require a signed Level 3 command from an authorized organization identity.
+        </div>
+      )}
+      editSlot={mutationSlot ?? (
+        <div className="empty-state">
+          Select an interface, then use Create/Edit to lifecycle domains and provider config references.
         </div>
       )}
     />
@@ -3729,6 +4134,18 @@ function countBy<T>(values: T[], keyFor: (value: T) => string | undefined) {
     counts.set(key, (counts.get(key) ?? 0) + 1);
   });
   return counts;
+}
+
+function groupBy<T>(values: T[], keyFor: (value: T) => string | undefined) {
+  const groups = new Map<string, T[]>();
+  values.forEach((value) => {
+    const key = keyFor(value);
+    if (!key) {
+      return;
+    }
+    groups.set(key, [...(groups.get(key) ?? []), value]);
+  });
+  return groups;
 }
 
 function BadgeManagerSurface({

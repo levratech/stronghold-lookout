@@ -14,6 +14,7 @@ import type {
   AuthorityReadSurface,
   AuthorityMutationCommand,
   AuthorityMutationResult,
+  AccountNamespaceReadModel,
   BadgeDefinitionMutationPayload,
   BadgeDefinitionReadModel,
   ContextArchivePayload,
@@ -32,7 +33,12 @@ import type {
   PrincipalReadModel,
   ProvisionContextServicePayload,
   ContextServiceBindingReadModel,
+  DomainBindingMutationPayload,
+  DomainBindingReadModel,
   ServiceDefinitionReadModel,
+  InterfaceAuthProviderConfigReadModel,
+  InterfaceAuthProviderMutationPayload,
+  InterfaceBindingReadModel,
   SubjectCreationPayload,
 } from "./authority-types";
 
@@ -65,6 +71,10 @@ interface RawAuthorityListResponse<T> {
   badge_grants?: T[];
   service_definitions?: T[];
   service_bindings?: T[];
+  account_namespaces?: T[];
+  interfaces?: T[];
+  domain_bindings?: T[];
+  interface_auth_providers?: T[];
   principal_keys?: T[];
   audit_events?: T[];
 }
@@ -122,6 +132,14 @@ function authorityReadSubject(surface: AuthorityReadSurface) {
       return "stronghold.authority.read.service_definitions";
     case "service_bindings":
       return "stronghold.authority.read.service_bindings";
+    case "account_namespaces":
+      return "stronghold.authority.read.account_namespaces";
+    case "interfaces":
+      return "stronghold.authority.read.interfaces";
+    case "domain_bindings":
+      return "stronghold.authority.read.domain_bindings";
+    case "interface_auth_providers":
+      return "stronghold.authority.read.interface_auth_providers";
     case "keys":
       return "stronghold.authority.read.principal_keys";
     case "audit":
@@ -233,6 +251,13 @@ export function authorityMutationRequiresSignature(command: AuthorityMutationCom
     "principal_badge.grant",
     "principal_badge.revoke",
     "context_service.provision",
+    "domain_binding.create",
+    "domain_binding.verify",
+    "domain_binding.enable",
+    "domain_binding.disable",
+    "domain_binding.archive",
+    "interface_auth_provider.upsert",
+    "interface_auth_provider.archive",
     "principal_key.revoke",
     "principal_key.rotate",
   ].includes(command);
@@ -339,6 +364,46 @@ export async function readServiceBindings(signal?: AbortSignal, filter?: Authori
   return normalizeList(payload, "service_bindings") as AuthorityListResponse<ContextServiceBindingReadModel>;
 }
 
+export async function readAccountNamespaces(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
+  const payload = await readJSON<RawAuthorityListResponse<AccountNamespaceReadModel>>(
+    "account_namespaces",
+    signal,
+    filter,
+    transport,
+  );
+  return normalizeList(payload, "account_namespaces") as AuthorityListResponse<AccountNamespaceReadModel>;
+}
+
+export async function readInterfaces(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
+  const payload = await readJSON<RawAuthorityListResponse<InterfaceBindingReadModel>>(
+    "interfaces",
+    signal,
+    filter,
+    transport,
+  );
+  return normalizeList(payload, "interfaces") as AuthorityListResponse<InterfaceBindingReadModel>;
+}
+
+export async function readDomainBindings(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
+  const payload = await readJSON<RawAuthorityListResponse<DomainBindingReadModel>>(
+    "domain_bindings",
+    signal,
+    filter,
+    transport,
+  );
+  return normalizeList(payload, "domain_bindings") as AuthorityListResponse<DomainBindingReadModel>;
+}
+
+export async function readInterfaceAuthProviders(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
+  const payload = await readJSON<RawAuthorityListResponse<InterfaceAuthProviderConfigReadModel>>(
+    "interface_auth_providers",
+    signal,
+    filter,
+    transport,
+  );
+  return normalizeList(payload, "interface_auth_providers") as AuthorityListResponse<InterfaceAuthProviderConfigReadModel>;
+}
+
 export async function readPrincipalKeys(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
   const payload = await readJSON<RawAuthorityListResponse<PrincipalKeyReadModel>>(
     "keys",
@@ -440,6 +505,34 @@ export function revokePrincipalBadge(payload: PrincipalBadgeGrantMutationPayload
 
 export function provisionContextService(payload: ProvisionContextServicePayload, signing?: AuthorityMutationSigningOptions) {
   return mutateJSON("context_service.provision", payload, signing);
+}
+
+export function createDomainBinding(payload: DomainBindingMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("domain_binding.create", payload, signing);
+}
+
+export function verifyDomainBinding(payload: DomainBindingMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("domain_binding.verify", payload, signing);
+}
+
+export function enableDomainBinding(payload: DomainBindingMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("domain_binding.enable", payload, signing);
+}
+
+export function disableDomainBinding(payload: DomainBindingMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("domain_binding.disable", payload, signing);
+}
+
+export function archiveDomainBinding(payload: DomainBindingMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("domain_binding.archive", payload, signing);
+}
+
+export function upsertInterfaceAuthProvider(payload: InterfaceAuthProviderMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("interface_auth_provider.upsert", payload, signing);
+}
+
+export function archiveInterfaceAuthProvider(payload: InterfaceAuthProviderMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("interface_auth_provider.archive", payload, signing);
 }
 
 export function registerPrincipalKey(payload: PrincipalKeyMutationPayload) {

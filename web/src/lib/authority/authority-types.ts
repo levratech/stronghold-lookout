@@ -109,6 +109,58 @@ export interface ContextServiceBindingReadModel {
   revoked_at?: string;
 }
 
+export interface AccountNamespaceReadModel {
+  id: string;
+  name: string;
+  owning_context_id: string;
+  default_context_id: string;
+  status: string;
+  archived_at?: string;
+}
+
+export interface InterfaceBindingReadModel {
+  id: string;
+  interface_key: string;
+  account_namespace_id: string;
+  owning_context_id: string;
+  default_context_id: string;
+  display_name?: string;
+  status: string;
+  archived_at?: string;
+}
+
+export interface DomainBindingReadModel {
+  id: string;
+  interface_id: string;
+  hostname: string;
+  kind: string;
+  verification_status: string;
+  tls_status: string;
+  status: string;
+  verification_ready: boolean;
+  tls_ready: boolean;
+  verified_at?: string;
+  archived_at?: string;
+}
+
+export interface InterfaceAuthProviderConfigReadModel {
+  id: string;
+  interface_id: string;
+  domain_binding_id?: string;
+  provider: string;
+  client_id_present: boolean;
+  client_secret_present: boolean;
+  auth_url_present?: boolean;
+  token_url_present?: boolean;
+  userinfo_url_present?: boolean;
+  scopes?: string[];
+  redirect_path?: string;
+  enrollment_policy?: string;
+  status: string;
+  redacted: boolean;
+  archived_at?: string;
+}
+
 export interface PrincipalKeyReadModel {
   id: string;
   principal_id: string;
@@ -146,6 +198,10 @@ export interface AuthorityOverviewReadModel {
   badge_grants?: PrincipalBadgeGrantReadModel[];
   service_definitions?: ServiceDefinitionReadModel[];
   service_bindings?: ContextServiceBindingReadModel[];
+  account_namespaces?: AccountNamespaceReadModel[];
+  interfaces?: InterfaceBindingReadModel[];
+  domain_bindings?: DomainBindingReadModel[];
+  interface_auth_providers?: InterfaceAuthProviderConfigReadModel[];
   principal_keys?: PrincipalKeyReadModel[];
   audit_events?: AuthorityAuditEventReadModel[];
   page: PageInfo;
@@ -172,6 +228,10 @@ export type AuthorityReadSurface =
   | "grants"
   | "service_definitions"
   | "service_bindings"
+  | "account_namespaces"
+  | "interfaces"
+  | "domain_bindings"
+  | "interface_auth_providers"
   | "keys"
   | "audit";
 
@@ -198,6 +258,13 @@ export type AuthorityMutationCommand =
   | "principal_badge.grant"
   | "principal_badge.revoke"
   | "context_service.provision"
+  | "domain_binding.create"
+  | "domain_binding.verify"
+  | "domain_binding.enable"
+  | "domain_binding.disable"
+  | "domain_binding.archive"
+  | "interface_auth_provider.upsert"
+  | "interface_auth_provider.archive"
   | "principal_key.register"
   | "principal_key.revoke"
   | "principal_key.rotate";
@@ -329,4 +396,28 @@ export interface PrincipalKeyMutationPayload {
   old_key_id?: string;
   algorithm?: string;
   public_key?: string;
+}
+
+export interface DomainBindingMutationPayload {
+  domain_binding_id?: string;
+  interface_id?: string;
+  hostname?: string;
+  kind?: string;
+  verification_token?: string;
+}
+
+export interface InterfaceAuthProviderMutationPayload {
+  config_id?: string;
+  interface_id?: string;
+  domain_binding_id?: string;
+  provider?: string;
+  client_id_ref?: string;
+  client_secret_ref?: string;
+  auth_url_ref?: string;
+  token_url_ref?: string;
+  userinfo_url_ref?: string;
+  scopes?: string[];
+  redirect_path?: string;
+  enrollment_policy?: string;
+  status?: string;
 }
