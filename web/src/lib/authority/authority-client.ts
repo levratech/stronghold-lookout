@@ -222,6 +222,9 @@ async function mutateJSON<T extends object>(
 export function authorityMutationRequiresSignature(command: AuthorityMutationCommand) {
   return [
     "context.create",
+    "context.create_child",
+    "context.create_org_root",
+    "context.create_personal_root",
     "context.update",
     "principal_badge.grant",
     "principal_badge.revoke",
@@ -382,6 +385,18 @@ export function createDurablePrincipal(payload: CreateDurablePrincipalPayload, s
 
 export function createContext(payload: ContextMutationPayload, signing?: AuthorityMutationSigningOptions) {
   return mutateJSON("context.create", payload, signing);
+}
+
+export function createChildContext(payload: ContextMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("context.create_child", payload, signing);
+}
+
+export function createOrgRootContext(payload: ContextMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("context.create_org_root", payload, signing);
+}
+
+export function createPersonalRootContext(payload: ContextMutationPayload, signing?: AuthorityMutationSigningOptions) {
+  return mutateJSON("context.create_personal_root", payload, signing);
 }
 
 export function updateContext(payload: ContextMutationPayload, signing?: AuthorityMutationSigningOptions) {

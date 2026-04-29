@@ -15,9 +15,12 @@ import {
   archiveBadgeDefinition,
   createAccount,
   createBadgeDefinition,
+  createChildContext,
   createContext,
   createDurablePrincipal,
   createIdentity,
+  createOrgRootContext,
+  createPersonalRootContext,
   createSubject,
   grantPrincipalBadge,
   linkAccountAuthMethod,
@@ -1907,7 +1910,10 @@ function ContextMutationFields({ contexts }: { contexts: ContextReadModel[] }) {
       <label>
         Action
         <select name="context_command" required defaultValue="context.create">
-          <option value="context.create">Create new context</option>
+          <option value="context.create">Create new context (compatibility)</option>
+          <option value="context.create_child">Create child context</option>
+          <option value="context.create_org_root">Create organization root</option>
+          <option value="context.create_personal_root">Create personal root</option>
           <option value="context.update">Rename existing context</option>
         </select>
       </label>
@@ -2360,17 +2366,34 @@ async function submitAuthorityMutation(
       ? rotatePrincipalKey(payload, signingFor(command, signingOptions))
       : registerPrincipalKey(payload);
   }
-  const command: AuthorityMutationCommand = textValue(form, "context_command") === "context.update"
-    ? "context.update"
+  const requestedCommand = textValue(form, "context_command") as AuthorityMutationCommand;
+  const command: AuthorityMutationCommand = [
+    "context.create",
+    "context.create_child",
+    "context.create_org_root",
+    "context.create_personal_root",
+    "context.update",
+  ].includes(requestedCommand)
+    ? requestedCommand
     : "context.create";
   const payload = {
     name: textValue(form, "name"),
     context_id: optionalTextValue(form, "context_id"),
     parent_id: optionalTextValue(form, "parent_id"),
   };
-  return command === "context.update"
-    ? updateContext(payload, signingFor(command, signingOptions))
-    : createContext(payload, signingFor(command, signingOptions));
+  if (command === "context.update") {
+    return updateContext(payload, signingFor(command, signingOptions));
+  }
+  if (command === "context.create_child") {
+    return createChildContext(payload, signingFor(command, signingOptions));
+  }
+  if (command === "context.create_org_root") {
+    return createOrgRootContext(payload, signingFor(command, signingOptions));
+  }
+  if (command === "context.create_personal_root") {
+    return createPersonalRootContext(payload, signingFor(command, signingOptions));
+  }
+  return createContext(payload, signingFor(command, signingOptions));
 }
 
 function signingFor(
