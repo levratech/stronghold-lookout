@@ -29,7 +29,13 @@ export interface ContextReadModel {
   id: string;
   parent_id?: string;
   parent_name?: string;
+  root_context_id?: string;
   name: string;
+  description?: string;
+  kind?: "organization" | "personal" | "system";
+  domain?: string;
+  owner_identity_id?: string;
+  created_by_identity_id?: string;
   depth?: number;
   child_count?: number;
 }
@@ -262,6 +268,11 @@ export interface ContextMutationPayload {
   context_id?: string;
   parent_id?: string;
   name: string;
+  description?: string;
+  kind?: "organization" | "personal" | "system";
+  domain?: string;
+  owner_identity_id?: string;
+  created_by_identity_id?: string;
 }
 
 export interface BadgeDefinitionMutationPayload {
