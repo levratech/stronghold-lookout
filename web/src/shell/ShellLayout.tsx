@@ -9,6 +9,8 @@ import { readContexts, readIdentities } from "../lib/authority/authority-client"
 import type { ContextReadModel } from "../lib/authority/authority-types";
 
 const manageModuleIds: LookoutModuleId[] = ["contexts", "identities", "badges", "grants", "services"];
+const securityModuleIds: LookoutModuleId[] = ["keys", "transport", "audit"];
+const debugModuleIds: LookoutModuleId[] = ["overview", "resource-interface", "sentry", "aegis"];
 
 interface WorkspaceContextState {
   status: "idle" | "loading" | "ready" | "error";
@@ -67,6 +69,8 @@ export function ShellLayout() {
     lookoutModules.find((module) => module.route === "/");
   const moduleById = new Map(lookoutModules.map((module) => [module.id, module]));
   const manageModules = manageModuleIds.map((moduleId) => moduleById.get(moduleId)).filter(isLookoutModule);
+  const securityModules = securityModuleIds.map((moduleId) => moduleById.get(moduleId)).filter(isLookoutModule);
+  const debugModules = debugModuleIds.map((moduleId) => moduleById.get(moduleId)).filter(isLookoutModule);
   const activeAccountId = activePrincipal?.accountId ?? snapshot.account?.accountId ?? root?.accountId ?? "";
   const [workspaceContexts, setWorkspaceContexts] = useState<WorkspaceContextState>({
     status: "idle",
@@ -314,6 +318,42 @@ export function ShellLayout() {
                   ))}
                 </div>
               </div>
+
+              <div className="workspace-nav workspace-nav--manage">
+                <div className="workspace-nav__label">Security</div>
+                <div className="workspace-nav__manage">
+                  {securityModules.map((module) => (
+                    <NavLink
+                      key={module.id}
+                      to={module.route}
+                      className={({ isActive }) => `nav-link nav-link--compact${isActive ? " nav-link--active" : ""}`}
+                    >
+                      <div className="nav-link__icon">{module.icon}</div>
+                      <div className="nav-link__text">
+                        <div className="nav-link__title">{module.navLabel}</div>
+                      </div>
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+
+              <details className="workspace-nav workspace-nav--debug">
+                <summary className="workspace-nav__label workspace-nav__label--summary">Debug</summary>
+                <div className="workspace-nav__manage">
+                  {debugModules.map((module) => (
+                    <NavLink
+                      key={module.id}
+                      to={module.route}
+                      className={({ isActive }) => `nav-link nav-link--compact${isActive ? " nav-link--active" : ""}`}
+                    >
+                      <div className="nav-link__icon">{module.icon}</div>
+                      <div className="nav-link__text">
+                        <div className="nav-link__title">{module.navLabel}</div>
+                      </div>
+                    </NavLink>
+                  ))}
+                </div>
+              </details>
             </nav>
           </section>
         </div>

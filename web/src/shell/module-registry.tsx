@@ -185,9 +185,9 @@ export const lookoutModules: LookoutModuleDefinition[] = [
     description: "Principal key records, status, expiry, and revocation posture.",
     status: "partial",
     requiredCapabilities: ["keys:read"],
-    summary: "Cryptographic key metadata without exposing key material.",
-    surfaceLabel: "Authority Surface",
-    entryHint: "Placeholder now; becomes the principal-key posture surface in this phase.",
+    summary: "Cryptographic key metadata and browser Level 3 signing setup without exposing private key material.",
+    surfaceLabel: "Security Surface",
+    entryHint: "Generate and register the active principal's browser Ed25519 command-signing key before sensitive mutations.",
   },
   {
     id: "providers",

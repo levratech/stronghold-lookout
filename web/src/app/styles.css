@@ -335,6 +335,27 @@ button {
   font-size: 0.68rem;
 }
 
+.workspace-nav__label--summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.workspace-nav__label--summary::-webkit-details-marker {
+  display: none;
+}
+
+.workspace-nav__label--summary::after {
+  content: "show";
+  float: right;
+  color: rgba(151, 176, 198, 0.74);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+}
+
+.workspace-nav--debug[open] .workspace-nav__label--summary::after {
+  content: "hide";
+}
+
 .workspace-nav__contexts,
 .workspace-nav__manage {
   display: grid;
@@ -359,6 +380,11 @@ button {
 }
 
 .workspace-nav--manage {
+  padding-top: 4px;
+  border-top: 1px solid rgba(130, 161, 184, 0.12);
+}
+
+.workspace-nav--debug {
   padding-top: 4px;
   border-top: 1px solid rgba(130, 161, 184, 0.12);
 }
