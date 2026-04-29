@@ -28,21 +28,9 @@ steps:
     when:
       - event: push
         branch: main
-    environment:
-      ARTIFACT_SSH_KEY:
-        from_secret: artifact_ssh_key
-      ARTIFACT_SSH_HOST:
-        from_secret: artifact_ssh_host
-      ARTIFACT_SSH_USER:
-        from_secret: artifact_ssh_user
     commands:
-      - apk add --no-cache openssh-client
-      - mkdir -p ~/.ssh
-      - printf '%s\n' "$ARTIFACT_SSH_KEY" > ~/.ssh/id_ed25519
-      - chmod 600 ~/.ssh/id_ed25519
-      - ssh-keyscan -H "$ARTIFACT_SSH_HOST" >> ~/.ssh/known_hosts
       - SHORT_SHA="$(printf '%s' "${CI_COMMIT_SHA:-manual}" | cut -c1-12)"
       - DEST="/srv/artifacts/stronghold-lookout/$SHORT_SHA"
-      - ssh "$ARTIFACT_SSH_USER@$ARTIFACT_SSH_HOST" "mkdir -p '$DEST'"
-      - scp dist/stronghold-lookout-linux-amd64.tar.gz "$ARTIFACT_SSH_USER@$ARTIFACT_SSH_HOST:$DEST/"
-      - ssh "$ARTIFACT_SSH_USER@$ARTIFACT_SSH_HOST" "cd /srv/artifacts/stronghold-lookout && ln -sfn '$SHORT_SHA' latest"
+      - mkdir -p "$DEST"
+      - cp dist/stronghold-lookout-linux-amd64.tar.gz "$DEST/"
+      - ln -sfn "$SHORT_SHA" /srv/artifacts/stronghold-lookout/latest
