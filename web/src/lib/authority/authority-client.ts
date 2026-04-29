@@ -17,6 +17,7 @@ import type {
   BadgeDefinitionMutationPayload,
   BadgeDefinitionReadModel,
   ContextReadModel,
+  ContextOwnershipTransferPayload,
   ContextMutationPayload,
   CreateAccountPayload,
   CreateDurablePrincipalPayload,
@@ -226,6 +227,7 @@ export function authorityMutationRequiresSignature(command: AuthorityMutationCom
     "context.create_org_root",
     "context.create_personal_root",
     "context.update",
+    "context.transfer_ownership",
     "principal_badge.grant",
     "principal_badge.revoke",
     "context_service.provision",
@@ -401,6 +403,13 @@ export function createPersonalRootContext(payload: ContextMutationPayload, signi
 
 export function updateContext(payload: ContextMutationPayload, signing?: AuthorityMutationSigningOptions) {
   return mutateJSON("context.update", payload, signing);
+}
+
+export function transferContextOwnership(
+  payload: ContextOwnershipTransferPayload,
+  signing?: AuthorityMutationSigningOptions,
+) {
+  return mutateJSON("context.transfer_ownership", payload, signing);
 }
 
 export function createBadgeDefinition(payload: BadgeDefinitionMutationPayload, signing?: AuthorityMutationSigningOptions) {
