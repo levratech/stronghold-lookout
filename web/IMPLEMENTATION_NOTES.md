@@ -3,7 +3,8 @@
 ## What Was Built
 
 - A new `web/` boundary inside `stronghold-lookout` using React, TypeScript, and Vite.
-- A shell-first cockpit with top bar, left navigation, and module mounting.
+- A shell-first cockpit with top bar, workspace-focused left navigation, and module mounting.
+- The left navigation prioritizes Dashboard, the user's personal Home context, account-linked top-level contexts, and compact management entries for Contexts, Identities, Badges, Grants, and Services.
 - Static module registration for Overview, Sentry, Aegis, and authority cockpit surfaces.
 - A session provider centered on same-origin auth behavior under `/_/auth`.
 - A shared NATS WebSocket provider centered on `/_/nats`.

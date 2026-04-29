@@ -1,40 +1,21 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
 import { lookoutEnvironment } from "../env";
 import { lookoutModules, type LookoutModuleDefinition, type LookoutModuleId } from "./module-registry";
 import { useSession } from "../lib/session/SessionProvider";
 import { useNats } from "../lib/nats/NatsProvider";
 import { StatusPill } from "../components/ui/StatusPill";
+import { readContexts, readIdentities } from "../lib/authority/authority-client";
+import type { ContextReadModel } from "../lib/authority/authority-types";
 
-interface NavigationSection {
-  label: string;
-  moduleIds: LookoutModuleId[];
-  defaultOpen?: boolean;
+const manageModuleIds: LookoutModuleId[] = ["contexts", "identities", "badges", "grants", "services"];
+
+interface WorkspaceContextState {
+  status: "idle" | "loading" | "ready" | "error";
+  detail: string;
+  personalContext?: ContextReadModel;
+  topLevelContexts: ContextReadModel[];
 }
-
-const navigationSections: NavigationSection[] = [
-  {
-    label: "Home",
-    moduleIds: ["dashboard"],
-    defaultOpen: true,
-  },
-  {
-    label: "Manage",
-    moduleIds: ["contexts", "identities", "badges", "grants", "services"],
-    defaultOpen: true,
-  },
-  {
-    label: "Security",
-    moduleIds: ["accounts", "auth-methods", "principals", "keys"],
-  },
-  {
-    label: "Operations",
-    moduleIds: ["transport", "audit"],
-  },
-  {
-    label: "Debug",
-    moduleIds: ["overview", "aegis", "resource-interface"],
-  },
-];
 
 function isLookoutModule(module: LookoutModuleDefinition | undefined): module is LookoutModuleDefinition {
   return Boolean(module);
@@ -85,6 +66,87 @@ export function ShellLayout() {
       .sort((a, b) => b.route.length - a.route.length)[0] ??
     lookoutModules.find((module) => module.route === "/");
   const moduleById = new Map(lookoutModules.map((module) => [module.id, module]));
+  const manageModules = manageModuleIds.map((moduleId) => moduleById.get(moduleId)).filter(isLookoutModule);
+  const activeAccountId = activePrincipal?.accountId ?? snapshot.account?.accountId ?? root?.accountId ?? "";
+  const [workspaceContexts, setWorkspaceContexts] = useState<WorkspaceContextState>({
+    status: "idle",
+    detail: "Context rail has not loaded yet.",
+    topLevelContexts: [],
+  });
+
+  useEffect(() => {
+    if (snapshot.status !== "authenticated" || !activeAccountId) {
+      setWorkspaceContexts({
+        status: "idle",
+        detail: "Login to see your home context and accessible spaces.",
+        topLevelContexts: [],
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    setWorkspaceContexts({
+      status: "loading",
+      detail: "Loading your contexts.",
+      topLevelContexts: [],
+    });
+
+    async function loadWorkspaceContexts() {
+      try {
+        const identities = await readIdentities(controller.signal, {
+          account_id: activeAccountId,
+          limit: 100,
+        });
+        const identityIds = new Set(identities.items.map((identity) => identity.id));
+        const contextIds = [...new Set(identities.items.map((identity) => identity.context_id).filter(Boolean))];
+        const contextResponses = await Promise.all(
+          contextIds.map((contextId) =>
+            readContexts(controller.signal, {
+              context_id: contextId,
+              limit: 100,
+            }),
+          ),
+        );
+        if (controller.signal.aborted) {
+          return;
+        }
+        const contextsById = new Map<string, ContextReadModel>();
+        contextResponses.flatMap((response) => response.items).forEach((context) => {
+          contextsById.set(context.id, context);
+        });
+        const contexts = [...contextsById.values()].sort(compareContexts);
+        const personalContext =
+          contexts.find(
+            (context) =>
+              context.kind === "personal" &&
+              (!context.owner_identity_id || identityIds.has(context.owner_identity_id)),
+          ) ?? contexts.find((context) => context.kind === "personal");
+        const topLevelContexts = contexts.filter(
+          (context) => !context.parent_id && context.id !== personalContext?.id && context.kind !== "personal",
+        );
+        setWorkspaceContexts({
+          status: "ready",
+          detail: contextIds.length
+            ? "Loaded contexts tied to your account identities."
+            : "No context identities are visible for this account yet.",
+          personalContext,
+          topLevelContexts,
+        });
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+        setWorkspaceContexts({
+          status: "error",
+          detail: error instanceof Error ? error.message : "Unable to load workspace contexts.",
+          topLevelContexts: [],
+        });
+      }
+    }
+
+    void loadWorkspaceContexts();
+    return () => controller.abort();
+  }, [activeAccountId, snapshot.status]);
 
   const operatorSummary =
     activePrincipal?.email ??
@@ -171,41 +233,87 @@ export function ShellLayout() {
           <section className="sidebar__section">
             <h2 className="sidebar__heading">Lookout</h2>
             <nav className="sidebar__nav" aria-label="Primary">
-              {navigationSections.map((section) => {
-                const modules = section.moduleIds
-                  .map((moduleId) => moduleById.get(moduleId))
-                  .filter(isLookoutModule);
-                const isActiveSection = modules.some((module) => module?.id === currentModule?.id);
-                return (
-                  <details
-                    className="nav-section"
-                    open={section.defaultOpen || isActiveSection ? true : undefined}
-                    key={section.label}
+              <NavLink
+                to="/"
+                end
+                className={({ isActive }) => `nav-link nav-link--dashboard${isActive ? " nav-link--active" : ""}`}
+              >
+                <div className="nav-link__icon">DB</div>
+                <div className="nav-link__text">
+                  <div className="nav-link__title">Dashboard</div>
+                </div>
+              </NavLink>
+
+              <div className="workspace-nav">
+                <div className="workspace-nav__label">Personal</div>
+                {workspaceContexts.personalContext ? (
+                  <NavLink
+                    to={contextRoute(workspaceContexts.personalContext.id)}
+                    className={({ isActive }) => `nav-link nav-link--home${isActive ? " nav-link--active" : ""}`}
                   >
-                    <summary className="nav-section__summary">
-                      <span>{section.label}</span>
-                      <span className="nav-section__count">{modules.length}</span>
-                    </summary>
-                    <div className="nav-section__links">
-                      {modules.map((module) => (
-                        <NavLink
-                          key={module.id}
-                          to={module.route}
-                          end={module.route === "/"}
-                          className={({ isActive }) =>
-                            `nav-link${isActive ? " nav-link--active" : ""}`
-                          }
-                        >
-                          <div className="nav-link__icon">{module.icon}</div>
-                          <div className="nav-link__text">
-                            <div className="nav-link__title">{module.navLabel}</div>
-                          </div>
-                        </NavLink>
-                      ))}
+                    <div className="nav-link__icon nav-link__icon--home">
+                      <HomeIcon />
                     </div>
-                  </details>
-                );
-              })}
+                    <div className="nav-link__text">
+                      <div className="nav-link__title">Home</div>
+                      <div className="nav-link__description">{workspaceContexts.personalContext.name}</div>
+                    </div>
+                  </NavLink>
+                ) : (
+                  <div className={`workspace-nav__empty workspace-nav__empty--${workspaceContexts.status}`}>
+                    {workspaceContexts.status === "loading" ? "Loading Home..." : "Home context not visible yet."}
+                  </div>
+                )}
+              </div>
+
+              <div className="workspace-nav">
+                <div className="workspace-nav__label">Contexts</div>
+                {workspaceContexts.topLevelContexts.length ? (
+                  <div className="workspace-nav__contexts">
+                    {workspaceContexts.topLevelContexts.map((context) => (
+                      <NavLink
+                        key={context.id}
+                        to={contextRoute(context.id)}
+                        className={({ isActive }) => `nav-link nav-link--context${isActive ? " nav-link--active" : ""}`}
+                      >
+                        <div className="nav-link__icon">{contextInitials(context)}</div>
+                        <div className="nav-link__text">
+                          <div className="nav-link__title">{context.name || "Untitled context"}</div>
+                          <div className="nav-link__description">
+                            {context.child_count ? `${context.child_count} sub-contexts` : "Top-level context"}
+                          </div>
+                        </div>
+                      </NavLink>
+                    ))}
+                  </div>
+                ) : (
+                  <div className={`workspace-nav__empty workspace-nav__empty--${workspaceContexts.status}`}>
+                    {workspaceContexts.status === "loading"
+                      ? "Loading contexts..."
+                      : workspaceContexts.status === "error"
+                        ? "Unable to load contexts."
+                        : "No top-level contexts visible."}
+                  </div>
+                )}
+              </div>
+
+              <div className="workspace-nav workspace-nav--manage">
+                <div className="workspace-nav__label">Manage</div>
+                <div className="workspace-nav__manage">
+                  {manageModules.map((module) => (
+                    <NavLink
+                      key={module.id}
+                      to={module.route}
+                      className={({ isActive }) => `nav-link nav-link--compact${isActive ? " nav-link--active" : ""}`}
+                    >
+                      <div className="nav-link__icon">{module.icon}</div>
+                      <div className="nav-link__text">
+                        <div className="nav-link__title">{module.navLabel}</div>
+                      </div>
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
             </nav>
           </section>
         </div>
@@ -215,5 +323,42 @@ export function ShellLayout() {
         <Outlet />
       </main>
     </div>
+  );
+}
+
+function contextRoute(contextId: string) {
+  return `/authority/contexts?context_id=${encodeURIComponent(contextId)}`;
+}
+
+function contextInitials(context: ContextReadModel) {
+  const label = context.name || context.id;
+  const initials = label
+    .split(/[^a-zA-Z0-9]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+  return initials || "CX";
+}
+
+function compareContexts(left: ContextReadModel, right: ContextReadModel) {
+  const depthDelta = (left.depth ?? 0) - (right.depth ?? 0);
+  if (depthDelta !== 0) {
+    return depthDelta;
+  }
+  return (left.name || left.id).localeCompare(right.name || right.id);
+}
+
+function HomeIcon() {
+  return (
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <path
+        d="M4.75 10.75 12 4.5l7.25 6.25v7.75a1 1 0 0 1-1 1h-4.1v-5.6h-4.3v5.6h-4.1a1 1 0 0 1-1-1v-7.75Z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
   );
 }

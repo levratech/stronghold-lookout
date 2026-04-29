@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { Navigate, useParams } from "react-router-dom";
+import { Navigate, useParams, useSearchParams } from "react-router-dom";
 import { connect, credsAuthenticator, type NatsConnection } from "nats.ws";
 import { Panel } from "../../components/ui/Panel";
 import { StatusPill } from "../../components/ui/StatusPill";
@@ -346,6 +346,7 @@ interface NegativeTransportDrillCheck {
 
 export function AuthorityPlaceholderPage() {
   const { surface } = useParams();
+  const [searchParams] = useSearchParams();
   const module = findModule(surface);
   const { snapshot } = useSession();
   const nats = useNats();
@@ -354,25 +355,27 @@ export function AuthorityPlaceholderPage() {
   const activeIdentityId = activePrincipal?.identityId ?? snapshot.identity?.identityId ?? "";
   const activePrincipalId = activePrincipal?.principalId ?? "";
   const activeContextId = activePrincipal?.contextId ?? snapshot.context?.contextId ?? "";
+  const requestedContextId = module?.id === "contexts" ? searchParams.get("context_id")?.trim() ?? "" : "";
+  const contextReadContextId = requestedContextId || activeContextId;
   const scopedFilters = useMemo(() => {
     const base = { limit: 100 };
     const withAccount: AuthorityReadFilter = activeAccountId ? { ...base, account_id: activeAccountId } : base;
-    const withContext: AuthorityReadFilter = activeContextId ? { ...base, context_id: activeContextId } : base;
+    const withContext: AuthorityReadFilter = contextReadContextId ? { ...base, context_id: contextReadContextId } : base;
     const withAccountContext: AuthorityReadFilter = {
       ...base,
       ...(activeAccountId ? { account_id: activeAccountId } : {}),
-      ...(activeContextId ? { context_id: activeContextId } : {}),
+      ...(contextReadContextId ? { context_id: contextReadContextId } : {}),
     };
     const withPrincipal: AuthorityReadFilter = activePrincipalId ? { ...base, principal_id: activePrincipalId } : base;
     const withPrincipalContext: AuthorityReadFilter = {
       ...base,
       ...(activePrincipalId ? { principal_id: activePrincipalId } : {}),
-      ...(activeContextId ? { context_id: activeContextId } : {}),
+      ...(contextReadContextId ? { context_id: contextReadContextId } : {}),
     };
     const withIdentityContext: AuthorityReadFilter = {
       ...base,
       ...(activeIdentityId ? { identity_id: activeIdentityId } : {}),
-      ...(activeContextId ? { context_id: activeContextId } : {}),
+      ...(contextReadContextId ? { context_id: contextReadContextId } : {}),
     };
     return {
       account: withAccount,
@@ -382,7 +385,7 @@ export function AuthorityPlaceholderPage() {
       principalContext: withPrincipalContext,
       identityContext: withIdentityContext,
     };
-  }, [activeAccountId, activeContextId, activeIdentityId, activePrincipalId]);
+  }, [activeAccountId, activeIdentityId, activePrincipalId, contextReadContextId]);
   const authorityReadTransport = useMemo(
     () =>
       nats.state === "connected" && nats.connection && nats.grantToken
@@ -856,6 +859,7 @@ export function AuthorityPlaceholderPage() {
         badges={readState.badges}
         grants={readState.grants}
         activeContextId={activeContextId}
+        requestedContextId={requestedContextId}
         mutationSlot={mutationSlot}
         mutationControls={contextMutationControls}
       />
@@ -3277,6 +3281,7 @@ function ContextManagerReadSurface({
   badges,
   grants,
   activeContextId,
+  requestedContextId,
   mutationSlot,
   mutationControls,
 }: {
@@ -3286,6 +3291,7 @@ function ContextManagerReadSurface({
   badges: BadgeDefinitionReadModel[];
   grants: PrincipalBadgeGrantReadModel[];
   activeContextId?: string;
+  requestedContextId?: string;
   mutationControls?: ContextMutationControls;
 } & ResourceMutationSlotProps) {
   const [query, setQuery] = useState("");
@@ -3330,6 +3336,14 @@ function ContextManagerReadSurface({
   const contextChildren = selectedContext
     ? sortedContexts.filter((context) => context.parent_id === selectedContext.id)
     : [];
+
+  useEffect(() => {
+    if (!requestedContextId) {
+      return;
+    }
+    setSelectedContextId(requestedContextId);
+    setMode("detail");
+  }, [requestedContextId]);
 
   function contextCounts(context: ContextReadModel) {
     const identityCount = identitiesByContext.get(context.id) ?? 0;

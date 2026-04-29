@@ -198,7 +198,7 @@ button {
 .sidebar__nav {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .nav-section {
@@ -291,6 +291,18 @@ button {
   font-size: 0.78rem;
 }
 
+.nav-link__icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.nav-link__icon--home {
+  color: #ffe2a6;
+  background:
+    radial-gradient(circle at 35% 22%, rgba(255, 226, 166, 0.34), transparent 45%),
+    rgba(247, 178, 103, 0.12);
+}
+
 .nav-link__text {
   min-width: 0;
 }
@@ -308,6 +320,81 @@ button {
 .nav-link__description {
   font-size: 0.82rem;
   margin-top: 2px;
+}
+
+.workspace-nav {
+  display: grid;
+  gap: 7px;
+}
+
+.workspace-nav__label {
+  padding: 0 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.68rem;
+}
+
+.workspace-nav__contexts,
+.workspace-nav__manage {
+  display: grid;
+  gap: 4px;
+}
+
+.workspace-nav__empty {
+  margin: 0 2px;
+  padding: 10px 11px;
+  border: 1px dashed rgba(130, 161, 184, 0.18);
+  border-radius: 13px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.workspace-nav__empty--error {
+  color: #ffc2c6;
+  border-color: rgba(240, 113, 120, 0.25);
+  background: rgba(240, 113, 120, 0.08);
+}
+
+.workspace-nav--manage {
+  padding-top: 4px;
+  border-top: 1px solid rgba(130, 161, 184, 0.12);
+}
+
+.nav-link--dashboard,
+.nav-link--home,
+.nav-link--context,
+.nav-link--compact {
+  min-height: 52px;
+}
+
+.nav-link--home {
+  border-color: rgba(247, 178, 103, 0.22);
+  background:
+    linear-gradient(105deg, rgba(247, 178, 103, 0.17), rgba(109, 198, 182, 0.05)),
+    rgba(255, 255, 255, 0.035);
+}
+
+.nav-link--home:hover,
+.nav-link--home.nav-link--active {
+  border-color: rgba(247, 178, 103, 0.42);
+  background:
+    linear-gradient(105deg, rgba(247, 178, 103, 0.24), rgba(109, 198, 182, 0.08)),
+    rgba(247, 178, 103, 0.08);
+}
+
+.nav-link--compact {
+  min-height: 44px;
+  grid-template-columns: 30px minmax(0, 1fr);
+  padding: 7px 9px;
+}
+
+.nav-link--compact .nav-link__icon {
+  width: 30px;
+  height: 30px;
+  font-size: 0.72rem;
 }
 
 .main {
