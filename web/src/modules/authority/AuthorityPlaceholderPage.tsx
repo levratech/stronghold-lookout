@@ -1800,7 +1800,7 @@ function AccountMutationFields({ defaultDomainId }: { defaultDomainId: string })
   return (
     <div className="authority-form__grid">
       <label>
-        Domain ID
+        Login namespace / default context
         <input name="domain_id" defaultValue={defaultDomainId} required />
       </label>
       <label>
@@ -1850,7 +1850,7 @@ function AuthMethodMutationFields({
         <input name="method_id" placeholder="Required for status/revoke, optional for link" />
       </label>
       <label>
-        Domain ID
+        Login namespace / default context
         <input name="domain_id" defaultValue={defaultDomainId} />
       </label>
       <label>
@@ -4283,7 +4283,7 @@ function AccountList({ accounts }: { accounts: AccountReadModel[] }) {
           <div>
             <div className="list-item__title">{account.email || account.id}</div>
             <div className="list-item__body">
-              account:{account.id} · domain:{account.domain_id || "unknown"}
+              account:{account.id} · login namespace/default context:{account.domain_id || "unknown"}
             </div>
             <div className="list-item__body">
               auth methods:{account.auth_method_count ?? 0} · providers:
@@ -4321,7 +4321,7 @@ function AuthMethodList({
                 method:{method.id} · type:{method.method_type} · status:{method.status || "unknown"}
               </div>
               <div className="list-item__body">
-                account:{account?.email ?? method.account_id} · domain:{method.domain_id}
+                account:{account?.email ?? method.account_id} · login namespace/default context:{method.domain_id}
               </div>
               <div className="list-item__body">
                 subject:{method.subject_present ? "present and redacted" : "not present"} · email:
