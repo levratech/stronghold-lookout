@@ -36,8 +36,11 @@
   register only the rawurl-base64 public key with Sentry, select the matching
   active key record, and run a local signing smoke check.
 - Controlled authority mutations attach Level 3 command-auth signatures for the
-  first enforced sensitive set: principal badge grant/revoke and principal key
-  revoke/rotate.
+  enforced sensitive set: context create/update/archive, principal badge
+  grant/revoke, context service provisioning, and principal key revoke/rotate.
+- The Contexts manager uses soft archive semantics rather than hard delete.
+  Organization contexts can be archived from detail when they have no visible
+  child contexts; personal and system contexts stay protected.
 
 ## What Is Placeholder Or Pending Backend Support
 
@@ -45,9 +48,10 @@
   credential, but deployment still depends on native credential configuration,
   the NATS WebSocket rail accepting that credential, and negative subject-policy
   tests staying green.
-- Browser command-signing keys can be generated and registered, and first-slice
-  verified command-auth enforcement is live for badge grant/revoke and key
-  revoke/rotate. Broader mutation coverage is still deliberate follow-up work.
+- Browser command-signing keys can be generated and registered, and verified
+  command-auth enforcement is live for context lifecycle, badge grant/revoke,
+  context-service provision, and key revoke/rotate. Broader mutation coverage is
+  still deliberate follow-up work.
 - No browser-safe Aegis read surface currently exposes interfaces, routes, or live config state.
 - The tracked JSON files in this repo are not used as live estate truth.
 

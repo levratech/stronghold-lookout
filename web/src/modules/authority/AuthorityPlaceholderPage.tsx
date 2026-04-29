@@ -13,6 +13,7 @@ import {
   AuthorityMutationError,
   authorityMutationRequiresSignature,
   archiveBadgeDefinition,
+  archiveContext,
   createAccount,
   createBadgeDefinition,
   createChildContext,
@@ -118,8 +119,8 @@ const surfaceNotes: Record<string, string[]> = {
   ],
   contexts: [
     "Show the context tree and current context scope.",
-    "Make context boundaries explicit before badge mutation work begins.",
-    "Keep context inspection read-only in this phase.",
+    "Make context boundaries explicit before badge and identity mutation work begins.",
+    "Use dedicated create, detail, edit, and archive screens rather than raw CRUD widgets.",
   ],
   badges: [
     "Show context-scoped badge definitions.",
@@ -807,10 +808,10 @@ export function AuthorityPlaceholderPage() {
   const mutationDisabledReason =
     snapshot.status !== "authenticated"
       ? "Log in before managing authority records. Read and mutation actions are intentionally unavailable without a same-origin session."
-      : !activePrincipal?.principalId
-        ? "No active principal is resolved for this session yet."
+        : !activePrincipal?.principalId
+          ? "No active principal is resolved for this session yet."
         : module.id === "contexts" && !signingOptions
-          ? "Context create and update actions require a ready browser command-signing key for the active principal."
+          ? "Context lifecycle actions require a ready browser command-signing key for the active principal."
           : undefined;
   const mutationSlot = isMutationSurface(module.id) ? (
     <AuthorityMutationPanel
@@ -1167,7 +1168,7 @@ function AuthorityMutationPanel({
   mutationState: MutationState;
   signingOptions?: AuthorityMutationSigningOptions;
   disabledReason?: string;
-  contextMode?: "create" | "edit";
+  contextMode?: "create" | "edit" | "archive";
   selectedContext?: ContextReadModel;
   onState: (state: MutationState) => void;
   onAccepted: () => void;
@@ -1205,8 +1206,8 @@ function AuthorityMutationPanel({
   return (
     <Panel
       eyebrow="Manage"
-      title={mutationTitle(moduleId)}
-      description={mutationDescription(moduleId)}
+      title={mutationTitle(moduleId, contextMode)}
+      description={mutationDescription(moduleId, contextMode)}
       actions={
         <StatusPill
           tone={disabledReason ? "warning" : mutationTone(mutationState.status)}
@@ -1247,7 +1248,7 @@ function AuthorityMutationPanel({
           )}
           <div className="button-row">
             <button className="button" type="submit" disabled={mutationState.status === "submitting"}>
-              {mutationSubmitLabel(moduleId)}
+              {mutationSubmitLabel(moduleId, contextMode)}
             </button>
           </div>
         </form>
@@ -1948,9 +1949,30 @@ function ContextMutationFields({
 }: {
   contexts: ContextReadModel[];
   defaultParentId: string;
-  mode: "create" | "edit";
+  mode: "create" | "edit" | "archive";
   selectedContext?: ContextReadModel;
 }) {
+  if (mode === "archive" && selectedContext) {
+    return (
+      <div className="authority-form__grid">
+        <input name="context_command" type="hidden" value="context.archive" />
+        <input name="context_id" type="hidden" value={selectedContext.id} />
+        <div className="state-notice state-notice--warning authority-form__wide">
+          <div className="state-notice__title">Archive {selectedContext.name || "this context"}?</div>
+          <div className="state-notice__body">
+            This is a soft archive, not a hard delete. The context will disappear from normal context lists, but audit evidence and stored authority history remain intact.
+          </div>
+        </div>
+        <div className="state-notice authority-form__wide">
+          <div className="state-notice__title">Archive guardrails</div>
+          <div className="state-notice__body">
+            Personal and system contexts are protected, and child contexts must be archived first.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (mode === "edit" && selectedContext) {
     return (
       <div className="authority-form__grid">
@@ -2456,9 +2478,15 @@ async function submitAuthorityMutation(
     "context.create_org_root",
     "context.create_personal_root",
     "context.update",
+    "context.archive",
   ].includes(requestedCommand)
     ? requestedCommand
     : "context.create";
+  if (command === "context.archive") {
+    return archiveContext({
+      context_id: textValue(form, "context_id"),
+    }, signingFor(command, signingOptions));
+  }
   const rawParentId = optionalTextValue(form, "parent_id");
   const rawDomain = optionalTextValue(form, "domain");
   const payload = {
@@ -2517,7 +2545,7 @@ function booleanValue(form: FormData, name: string, fallback: boolean) {
   return fallback;
 }
 
-function mutationTitle(moduleId: string) {
+function mutationTitle(moduleId: string, contextMode?: "create" | "edit" | "archive") {
   switch (moduleId) {
     case "accounts":
       return "Create Account / Enrollment";
@@ -2528,6 +2556,9 @@ function mutationTitle(moduleId: string) {
     case "principals":
       return "Create Durable Principal";
     case "contexts":
+      if (contextMode === "archive") {
+        return "Archive Context";
+      }
       return "New Or Edit Context";
     case "badges":
       return "Create, Update, Or Archive Badge";
@@ -2542,9 +2573,12 @@ function mutationTitle(moduleId: string) {
   }
 }
 
-function mutationDescription(moduleId: string) {
+function mutationDescription(moduleId: string, contextMode?: "create" | "edit" | "archive") {
   switch (moduleId) {
     case "contexts":
+      if (contextMode === "archive") {
+        return "Soft-archive an organization context after its children have been handled. Nothing is hard-deleted.";
+      }
       return "Create a child context under one you can manage, or rename an existing visible context. Raw IDs stay secondary.";
     case "badges":
       return "Create or archive context-bound badge labels. Badges remain scoped to the context where they are defined.";
@@ -2559,9 +2593,12 @@ function mutationDescription(moduleId: string) {
   }
 }
 
-function mutationSubmitLabel(moduleId: string) {
+function mutationSubmitLabel(moduleId: string, contextMode?: "create" | "edit" | "archive") {
   switch (moduleId) {
     case "contexts":
+      if (contextMode === "archive") {
+        return "Archive Context";
+      }
       return "Save Context";
     case "badges":
       return "Save Badge";
@@ -3296,7 +3333,7 @@ function ContextManagerReadSurface({
 } & ResourceMutationSlotProps) {
   const [query, setQuery] = useState("");
   const [selectedContextId, setSelectedContextId] = useState<string>();
-  const [mode, setMode] = useState<"list" | "detail" | "create" | "edit">("list");
+  const [mode, setMode] = useState<"list" | "detail" | "create" | "edit" | "archive">("list");
   const sortedContexts = [...contexts].sort((left, right) => {
     const depthDelta = (left.depth ?? 0) - (right.depth ?? 0);
     if (depthDelta !== 0) {
@@ -3362,10 +3399,16 @@ function ContextManagerReadSurface({
         mutationState={mutationControls.mutationState}
         signingOptions={mutationControls.signingOptions}
         disabledReason={mutationControls.disabledReason}
-        contextMode={mode === "edit" ? "edit" : "create"}
+        contextMode={mode === "edit" || mode === "archive" ? mode : "create"}
         selectedContext={selectedContext}
         onState={mutationControls.onState}
-        onAccepted={mutationControls.onAccepted}
+        onAccepted={() => {
+          mutationControls.onAccepted();
+          if (mode === "archive") {
+            setMode("list");
+            setSelectedContextId(undefined);
+          }
+        }}
       />
     ) : (
       mutationSlot
@@ -3401,20 +3444,29 @@ function ContextManagerReadSurface({
     );
   }
 
-  if (mode === "create" || mode === "edit") {
+  if (mode === "create" || mode === "edit" || mode === "archive") {
+    const modeLabel = mode === "create" ? "Create" : mode === "edit" ? "Edit" : "Archive";
     return (
       <div className="context-manager">
         <Panel
-          eyebrow={mode === "create" ? "Create" : "Edit"}
-          title={mode === "create" ? "Create Context" : `Edit ${selectedContext?.name || "Context"}`}
+          eyebrow={modeLabel}
+          title={
+            mode === "create"
+              ? "Create Context"
+              : mode === "edit"
+                ? `Edit ${selectedContext?.name || "Context"}`
+                : `Archive ${selectedContext?.name || "Context"}`
+          }
           description={
             mode === "create"
               ? "Create a new context from a dedicated form instead of mixing creation into the list."
-              : "Update the selected context from a dedicated form."
+              : mode === "edit"
+                ? "Update the selected context from a dedicated form."
+                : "Archive the selected organization context without hard-deleting authority history."
           }
           actions={
-            <button className="button button--ghost" type="button" onClick={() => setMode(mode === "edit" ? "detail" : "list")}>
-              {mode === "edit" ? "Back to detail" : "Back to list"}
+            <button className="button button--ghost" type="button" onClick={() => setMode(mode === "create" ? "list" : "detail")}>
+              {mode === "create" ? "Back to list" : "Back to detail"}
             </button>
           }
         >
@@ -3429,6 +3481,14 @@ function ContextManagerReadSurface({
   }
 
   if (mode === "detail") {
+    const canArchiveSelectedContext =
+      selectedContext?.kind === "organization" && (selectedContext.child_count ?? contextChildren.length) === 0;
+    const archiveUnavailableReason =
+      selectedContext?.kind === "personal" || selectedContext?.kind === "system"
+        ? "Personal and system contexts are protected."
+        : (selectedContext?.child_count ?? contextChildren.length) > 0
+          ? "Archive child contexts first."
+          : undefined;
     return (
       <div className="context-manager">
         <Panel
@@ -3443,6 +3503,17 @@ function ContextManagerReadSurface({
               {selectedContext && contextMutationSlot ? (
                 <button className="button" type="button" onClick={() => setMode("edit")}>
                   Edit
+                </button>
+              ) : null}
+              {selectedContext && contextMutationSlot ? (
+                <button
+                  className="button button--danger"
+                  disabled={!canArchiveSelectedContext}
+                  title={archiveUnavailableReason}
+                  type="button"
+                  onClick={() => setMode("archive")}
+                >
+                  Archive
                 </button>
               ) : null}
               {selectedContext ? (
@@ -3633,6 +3704,10 @@ function ContextDetailView({
           <div className="kv">
             <div className="kv__label">Visible children</div>
             <div className="kv__value">{context.child_count ?? 0}</div>
+          </div>
+          <div className="kv">
+            <div className="kv__label">Archive state</div>
+            <div className="kv__value">{context.archived_at ? `archived ${context.archived_at}` : "active"}</div>
           </div>
         </div>
       </details>

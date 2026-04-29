@@ -36,6 +36,7 @@ export interface ContextReadModel {
   domain?: string;
   owner_identity_id?: string;
   created_by_identity_id?: string;
+  archived_at?: string;
   depth?: number;
   child_count?: number;
 }
@@ -189,6 +190,7 @@ export type AuthorityMutationCommand =
   | "context.create_org_root"
   | "context.create_personal_root"
   | "context.update"
+  | "context.archive"
   | "context.transfer_ownership"
   | "badge_definition.create"
   | "badge_definition.update"
@@ -277,6 +279,10 @@ export interface ContextMutationPayload {
   domain?: string;
   owner_identity_id?: string;
   created_by_identity_id?: string;
+}
+
+export interface ContextArchivePayload {
+  context_id: string;
 }
 
 export interface ContextOwnershipTransferPayload {
