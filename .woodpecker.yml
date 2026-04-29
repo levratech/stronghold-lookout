@@ -1,0 +1,23 @@
+when:
+  - event: [push, pull_request]
+
+steps:
+  go-test:
+    image: golang:1.25
+    commands:
+      - go test ./...
+
+  web-build:
+    image: node:24-alpine
+    commands:
+      - cd web
+      - npm ci
+      - npm run build
+
+  package-linux-amd64:
+    image: golang:1.25
+    depends_on: [go-test, web-build]
+    commands:
+      - mkdir -p dist
+      - GOOS=linux GOARCH=amd64 go build -o dist/lookout-linux-amd64 ./cmd/lookout
+      - tar -czf dist/stronghold-lookout-linux-amd64.tar.gz -C dist lookout-linux-amd64
