@@ -3133,6 +3133,7 @@ function PrincipalList({
       records={records}
       listColumns={columns}
       showHeader={false}
+      createLabel="Create principal"
       createSlot={mutationSlot ?? (
         <div className="empty-state">
           Durable principal creation remains in the controlled mutation panel until the resource create form is converted.
@@ -3262,6 +3263,7 @@ function GrantList({
     {
       id: "id",
       label: "Grant ID",
+      defaultVisible: false,
       render: (record) => <span className="resource-list__id">{record.id}</span>,
       sortValue: (record) => record.id,
       searchValue: (record) => record.id,
@@ -3277,6 +3279,7 @@ function GrantList({
       records={records}
       listColumns={columns}
       showHeader={false}
+      createLabel="Assign access"
       createSlot={mutationSlot ?? (
         <div className="empty-state">
           Grant creation remains in the controlled mutation panel until the resource create form is converted.
@@ -3393,6 +3396,7 @@ function ServiceBindingList({
     {
       id: "id",
       label: "ID",
+      defaultVisible: false,
       render: (record) => <span className="resource-list__id">{record.id}</span>,
       sortValue: (record) => record.id,
       searchValue: (record) => record.id,
@@ -3408,6 +3412,7 @@ function ServiceBindingList({
       records={records}
       listColumns={columns}
       showHeader={false}
+      createLabel="Provision service"
       createSlot={mutationSlot ?? (
         <div className="empty-state">
           Service provisioning remains in the controlled mutation panel until the resource create form is converted.
@@ -3542,6 +3547,7 @@ function WhiteLabelInterfaceManager({
     {
       id: "id",
       label: "ID",
+      defaultVisible: false,
       render: (record) => <span className="resource-list__id">{record.id}</span>,
       sortValue: (record) => record.id,
       searchValue: (record) => record.id,
@@ -3557,6 +3563,7 @@ function WhiteLabelInterfaceManager({
       records={[...records, ...domainRecords]}
       listColumns={columns}
       showHeader={false}
+      createLabel="Create portal"
       createSlot={mutationSlot ?? (
         <div className="empty-state">
           Domain and provider changes require a signed Level 3 command from an authorized organization identity.
@@ -3676,6 +3683,7 @@ function KeyList({
       records={records}
       listColumns={columns}
       showHeader={false}
+      createLabel="Register key"
       createSlot={mutationSlot ?? (
         <div className="empty-state">
           Browser key registration remains in the Level 3 command-signing panel.
@@ -4218,6 +4226,7 @@ function BadgeManagerSurface({
     {
       id: "id",
       label: "ID",
+      defaultVisible: false,
       render: (record) => <span className="resource-list__id">{record.id}</span>,
       sortValue: (record) => record.id,
       searchValue: (record) => record.id,
@@ -4233,6 +4242,7 @@ function BadgeManagerSurface({
       records={records}
       listColumns={columns}
       showHeader={false}
+      createLabel="Create access label"
       createSlot={mutationSlot ?? (
         <div className="empty-state">
           Access label create/update controls remain in the controlled mutation panel until the resource create form is converted.
@@ -4410,6 +4420,7 @@ function IdentityList({
     {
       id: "id",
       label: "Identity ID",
+      defaultVisible: false,
       render: (record) => <span className="resource-list__id">{record.id}</span>,
       sortValue: (record) => record.id,
       searchValue: (record) => record.id,
@@ -4425,6 +4436,7 @@ function IdentityList({
       records={records}
       listColumns={columns}
       showHeader={false}
+      createLabel="Create identity"
       createSlot={mutationSlot ?? (
         <div className="empty-state">
           Person, identity, agent, and service creation remain in the controlled mutation panel until the resource create form is converted.

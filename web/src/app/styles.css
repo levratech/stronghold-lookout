@@ -941,6 +941,11 @@ button {
   gap: 10px;
 }
 
+.resource-list-count {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
 .resource-list-controls label,
 .resource-column-picker label {
   color: var(--text-muted);

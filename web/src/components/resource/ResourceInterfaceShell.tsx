@@ -10,22 +10,6 @@ import type {
 } from "./resource-types";
 
 type ResourceInterfaceMode = "list" | "create" | "detail" | "edit" | "lifecycle";
-
-function statusTone(status: ResourceInterfaceState["status"]) {
-  switch (status) {
-    case "ready":
-      return "success" as const;
-    case "loading":
-    case "empty":
-      return "warning" as const;
-    case "denied":
-    case "error":
-      return "danger" as const;
-    default:
-      return "neutral" as const;
-  }
-}
-
 export interface ResourceInterfaceShellProps {
   eyebrow: string;
   title: string;
@@ -63,7 +47,7 @@ export function ResourceInterfaceShell({
   editSlot,
   detailSlot,
   lifecycleSlot,
-  createLabel = "New Resource",
+  createLabel = "Create",
   editLabel = "Edit Resource",
   showHeader = true,
   onCreateRequested,
@@ -79,14 +63,6 @@ export function ResourceInterfaceShell({
   const [internalSelectedId, setInternalSelectedId] = useState<string>();
   const [sortColumnId, setSortColumnId] = useState(columns[0]?.id ?? "title");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const [visibleColumnIds, setVisibleColumnIds] = useState(
-    () =>
-      new Set(
-        columns
-          .filter((column) => column.defaultVisible !== false)
-          .map((column) => column.id),
-      ),
-  );
   const [pendingLifecycle, setPendingLifecycle] = useState<{
     record: ResourceRecordSummary;
     action: ResourceLifecycleAction;
@@ -95,7 +71,7 @@ export function ResourceInterfaceShell({
     status: "accepted",
     detail: "No lifecycle action has been submitted in this view.",
   });
-  const visibleColumns = columns.filter((column) => visibleColumnIds.has(column.id));
+  const visibleColumns = columns.filter((column) => column.defaultVisible !== false);
   const filteredRecords = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     const filtered = normalizedQuery
@@ -112,10 +88,9 @@ export function ResourceInterfaceShell({
     });
   }, [records, columns, query, sortColumnId, sortDirection]);
   const effectiveSelectedId = selectedId ?? internalSelectedId;
-  const selectedRecord =
-    records.find((record) => record.id === effectiveSelectedId) ??
-    filteredRecords[0] ??
-    records[0];
+  const selectedRecord = effectiveSelectedId
+    ? records.find((record) => record.id === effectiveSelectedId)
+    : undefined;
   const selectedRecordId = selectedRecord?.id;
   const createAvailable = Boolean(createSlot || onCreateRequested);
   const editAvailable = Boolean(selectedRecord && (editSlot || onEditRequested));
@@ -154,22 +129,24 @@ export function ResourceInterfaceShell({
             <h1 className="page__title">{title}</h1>
             <p className="page__summary">{summary}</p>
           </div>
-          <StatusPill tone={statusTone(state.status)} label={state.status} />
+          {createAvailable ? (
+            <button className="button" type="button" onClick={requestCreate}>
+              {createLabel}
+            </button>
+          ) : null}
         </header>
       ) : null}
 
       <section className="resource-interface__grid">
         {mode === "list" ? (
           <Panel
-            eyebrow="List"
-            title={`${filteredRecords.length} visible of ${records.length} loaded record${
-              records.length === 1 ? "" : "s"
-            }`}
-            description={state.detail}
+            eyebrow={eyebrow}
+            title={title}
+            description={summary}
             actions={
-              createAvailable ? (
+              createAvailable && !showHeader ? (
                 <button className="button" type="button" onClick={requestCreate}>
-                  Create
+                  {createLabel}
                 </button>
               ) : undefined
             }
@@ -178,11 +155,11 @@ export function ResourceInterfaceShell({
               <div className="resource-list-shell">
                 <div className="resource-list-controls">
                   <label className="resource-list-controls__search">
-                    Quick filter
+                    Search
                     <input
                       value={query}
                       onChange={(event) => setQuery(event.currentTarget.value)}
-                      placeholder="Search loaded records"
+                      placeholder={`Search ${title.toLowerCase()}`}
                       type="search"
                     />
                   </label>
@@ -211,29 +188,11 @@ export function ResourceInterfaceShell({
                   </label>
                 </div>
 
-                <fieldset className="resource-column-picker">
-                  <legend>Show columns</legend>
-                  {columns.map((column) => (
-                    <label key={column.id}>
-                      <input
-                        checked={visibleColumnIds.has(column.id)}
-                        onChange={() => {
-                          setVisibleColumnIds((current) => {
-                            const next = new Set(current);
-                            if (next.has(column.id)) {
-                              next.delete(column.id);
-                            } else {
-                              next.add(column.id);
-                            }
-                            return next;
-                          });
-                        }}
-                        type="checkbox"
-                      />
-                      {column.label}
-                    </label>
-                  ))}
-                </fieldset>
+                <div className="resource-list-count">
+                  {query.trim()
+                    ? `${filteredRecords.length} matching ${records.length === 1 ? "record" : "records"}`
+                    : `${records.length} ${records.length === 1 ? "record" : "records"}`}
+                </div>
 
                 {filteredRecords.length ? (
                   <div className="resource-list">
@@ -264,7 +223,7 @@ export function ResourceInterfaceShell({
                   </div>
                 ) : (
                   <div className="empty-state">
-                    No loaded records match the current filter.
+                    No records match the current search.
                   </div>
                 )}
               </div>
@@ -278,7 +237,6 @@ export function ResourceInterfaceShell({
           <Panel
             eyebrow="Create"
             title={createLabel}
-            description="Create is separated from the list so the user is intentionally starting a new record."
             actions={
               <button className="button button--ghost" type="button" onClick={() => setMode("list")}>
                 Back to list
@@ -297,7 +255,6 @@ export function ResourceInterfaceShell({
           <Panel
             eyebrow="Detail"
             title={selectedRecord?.title ?? "No record selected"}
-            description="Detail/view exposes one selected record before any mutation is started."
             actions={
               <div className="resource-view-actions">
                 <button className="button button--ghost" type="button" onClick={() => setMode("list")}>
@@ -328,7 +285,6 @@ export function ResourceInterfaceShell({
           <Panel
             eyebrow="Edit"
             title={selectedRecord ? `${editLabel}: ${selectedRecord.title}` : editLabel}
-            description="Edits stay in a dedicated view so changes are explicit and confirmation-friendly."
             actions={
               <button className="button button--ghost" type="button" onClick={() => setMode(selectedRecord ? "detail" : "list")}>
                 {selectedRecord ? "Back to detail" : "Back to list"}
@@ -347,7 +303,6 @@ export function ResourceInterfaceShell({
           <Panel
             eyebrow="Lifecycle"
             title={selectedRecord ? `Archive / Disable: ${selectedRecord.title}` : "Archive / Disable"}
-            description="Delete-like operations should be explicit lifecycle decisions, not accidental row actions."
             actions={
               <button className="button button--ghost" type="button" onClick={() => setMode(selectedRecord ? "detail" : "list")}>
                 {selectedRecord ? "Back to detail" : "Back to list"}
@@ -438,6 +393,7 @@ const defaultResourceColumns: ResourceListColumn[] = [
   {
     id: "id",
     label: "ID",
+    defaultVisible: false,
     render: (record) => <span className="resource-list__id">{record.id}</span>,
     sortValue: (record) => record.id,
     searchValue: (record) => record.id,
@@ -445,6 +401,7 @@ const defaultResourceColumns: ResourceListColumn[] = [
   {
     id: "tags",
     label: "Tags",
+    defaultVisible: false,
     render: (record) => record.tags?.join(", ") || "none",
     sortValue: (record) => record.tags?.join(" ") ?? "",
     searchValue: (record) => record.tags?.join(" ") ?? "",
@@ -519,9 +476,12 @@ function ResourceRecordDetail({ record }: { record: ResourceRecordSummary }) {
           ))}
         </div>
       ) : null}
-      <pre className="resource-raw">
-        {JSON.stringify(record.raw ?? { id: record.id, title: record.title }, null, 2)}
-      </pre>
+      <details className="advanced-details">
+        <summary>Technical details</summary>
+        <pre className="resource-raw">
+          {JSON.stringify(record.raw ?? { id: record.id, title: record.title }, null, 2)}
+        </pre>
+      </details>
     </div>
   );
 }
@@ -594,19 +554,21 @@ function ResourceLifecycleActions({
           </div>
         </div>
       ) : null}
-      <div className={`state-notice ${
-        result.status === "accepted"
-          ? "state-notice--success"
-          : result.status === "denied" || result.status === "error"
-            ? "state-notice--error"
-            : "state-notice--warning"
-      }`}>
-        <div className="state-notice__title">Lifecycle Evidence</div>
-        <div className="state-notice__body">
-          {result.detail}
-          {result.evidenceId ? ` Evidence: ${result.evidenceId}` : ""}
+      {result.detail !== "No lifecycle action has been submitted in this view." ? (
+        <div className={`state-notice ${
+          result.status === "accepted"
+            ? "state-notice--success"
+            : result.status === "denied" || result.status === "error"
+              ? "state-notice--error"
+              : "state-notice--warning"
+        }`}>
+          <div className="state-notice__title">Lifecycle result</div>
+          <div className="state-notice__body">
+            {result.detail}
+            {result.evidenceId ? ` Evidence: ${result.evidenceId}` : ""}
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
