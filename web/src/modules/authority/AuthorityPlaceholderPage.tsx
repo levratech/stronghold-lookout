@@ -919,7 +919,6 @@ export function AuthorityPlaceholderPage() {
         identities={readState.identities}
         badges={readState.badges}
         grants={readState.grants}
-        activeContextId={activeContextId}
         requestedContextId={requestedContextId}
         mutationSlot={mutationSlot}
         mutationControls={contextMutationControls}
@@ -1329,9 +1328,22 @@ function AuthorityMutationPanel({
           </div>
         </form>
       )}
-      {!disabledReason || mutationState.status !== "idle" ? (
-        <div className={`state-notice ${mutationState.status === "accepted" ? "state-notice--success" : mutationState.status === "idle" ? "" : mutationState.status === "submitting" ? "state-notice--loading" : "state-notice--error"}`}>
-          <div className="state-notice__title">Action Result</div>
+      {mutationState.status === "submitting" ? (
+        <div className="state-notice state-notice--loading">
+          <div className="state-notice__title">Submitting</div>
+          <div className="state-notice__body">{mutationState.detail}</div>
+        </div>
+      ) : mutationState.status === "accepted" ? (
+        <details className="advanced-details">
+          <summary>Technical result</summary>
+          <div className="state-notice state-notice--success">
+            <div className="state-notice__title">Accepted by Sentry</div>
+            <div className="state-notice__body">{mutationState.detail}</div>
+          </div>
+        </details>
+      ) : mutationState.status !== "idle" ? (
+        <div className="state-notice state-notice--error">
+          <div className="state-notice__title">Action could not be completed</div>
           <div className="state-notice__body">
             {mutationState.detail}
             {mutationState.result?.error_code ? ` (${mutationState.result.error_code})` : ""}
@@ -2028,21 +2040,17 @@ function ContextMutationFields({
   mode: "create" | "edit" | "archive";
   selectedContext?: ContextReadModel;
 }) {
+  const [createCommand, setCreateCommand] = useState(defaultParentId ? "context.create_child" : "context.create_org_root");
+
   if (mode === "archive" && selectedContext) {
     return (
       <div className="authority-form__grid">
         <input name="context_command" type="hidden" value="context.archive" />
         <input name="context_id" type="hidden" value={selectedContext.id} />
         <div className="state-notice state-notice--warning authority-form__wide">
-          <div className="state-notice__title">Archive {selectedContext.name || "this context"}?</div>
+          <div className="state-notice__title">Archive {selectedContext.name || "this space"}?</div>
           <div className="state-notice__body">
-            This is a soft archive, not a hard delete. The context will disappear from normal context lists, but audit evidence and stored authority history remain intact.
-          </div>
-        </div>
-        <div className="state-notice authority-form__wide">
-          <div className="state-notice__title">Archive guardrails</div>
-          <div className="state-notice__body">
-            Personal and system contexts are protected, and child contexts must be archived first.
+            This is a soft archive, not a hard delete. The space will disappear from normal lists, but audit evidence and stored authority history remain intact.
           </div>
         </div>
       </div>
@@ -2055,7 +2063,7 @@ function ContextMutationFields({
         <input name="context_command" type="hidden" value="context.update" />
         <input name="context_id" type="hidden" value={selectedContext.id} />
         <label>
-          Context name
+          Space name
           <input name="name" required defaultValue={selectedContext.name} />
         </label>
         <label>
@@ -2069,9 +2077,9 @@ function ContextMutationFields({
           </label>
         ) : null}
         <div className="state-notice">
-          <div className="state-notice__title">Editing {selectedContext.kind ?? "context"} metadata</div>
+          <div className="state-notice__title">Editing {selectedContext.kind ?? "space"} details</div>
           <div className="state-notice__body">
-            The context ID is kept out of the form and submitted behind the scenes: {shortId(selectedContext.id)}.
+            The space ID is kept out of the form and submitted behind the scenes.
           </div>
         </div>
       </div>
@@ -2081,40 +2089,42 @@ function ContextMutationFields({
   return (
     <div className="authority-form__grid">
       <label>
-        Create as
-        <select name="context_command" required defaultValue="context.create_child">
-          <option value="context.create_child">Create child context</option>
-          <option value="context.create_org_root">Create organization root</option>
-          <option value="context.create_personal_root">Create personal root</option>
+        Space type
+        <select
+          name="context_command"
+          required
+          value={createCommand}
+          onChange={(event) => setCreateCommand(event.currentTarget.value)}
+        >
+          <option value="context.create_child">Child space</option>
+          <option value="context.create_org_root">Organization space</option>
+          <option value="context.create_personal_root">Personal space</option>
         </select>
       </label>
       <label>
-        Context name
+        Space name
         <input name="name" required placeholder="Example: Goldmine Dezine" />
       </label>
       <label>
         Description
-        <textarea name="description" placeholder="What is this context for?" />
+        <textarea name="description" placeholder="What is this space for?" />
       </label>
-      <label>
-        Parent for child context
-        <select name="parent_id" defaultValue={defaultParentId}>
-          <option value="">No parent: only valid for org/personal root creation</option>
-          {contexts.map((context) => (
-            <option value={context.id} key={context.id}>{context.name || context.id}</option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Organization domain
-        <input name="domain" placeholder="Optional, org roots only" />
-      </label>
-      <div className="state-notice">
-        <div className="state-notice__title">Create uses named operations now.</div>
-        <div className="state-notice__body">
-          Child contexts require a parent. Organization and personal roots must be created as root contexts and personal roots cannot carry a domain.
-        </div>
-      </div>
+      {createCommand === "context.create_child" ? (
+        <label>
+          Place under
+          <select name="parent_id" required defaultValue={defaultParentId}>
+            {contexts.map((context) => (
+              <option value={context.id} key={context.id}>{context.name || context.id}</option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+      {createCommand === "context.create_org_root" ? (
+        <label>
+          Domain
+          <input name="domain" placeholder="example.com" />
+        </label>
+      ) : null}
     </div>
   );
 }
@@ -2831,7 +2841,7 @@ function mutationDescription(moduleId: string, contextMode?: "create" | "edit" |
       if (contextMode === "archive") {
         return "Soft-archive an organization space after its children have been handled. Nothing is hard-deleted.";
       }
-      return "Create a child space under one you can manage, or rename an existing visible space. Raw IDs stay secondary.";
+      return "Create a child space under one you manage, or rename an existing space. Raw IDs stay secondary.";
     case "badges":
       return "Create or archive space-bound access labels. Badges remain the underlying authority definition and stay scoped to the space where they are defined.";
     case "grants":
@@ -3722,7 +3732,6 @@ function ContextManagerReadSurface({
   identities,
   badges,
   grants,
-  activeContextId,
   requestedContextId,
   mutationSlot,
   mutationControls,
@@ -3732,7 +3741,6 @@ function ContextManagerReadSurface({
   identities: IdentityReadModel[];
   badges: BadgeDefinitionReadModel[];
   grants: PrincipalBadgeGrantReadModel[];
-  activeContextId?: string;
   requestedContextId?: string;
   mutationControls?: ContextMutationControls;
 } & ResourceMutationSlotProps) {
@@ -3772,9 +3780,8 @@ function ContextManagerReadSurface({
       .toLowerCase()
       .includes(normalized);
   });
-  const activeContext = sortedContexts.find((context) => context.id === activeContextId);
   const selectedContext =
-    sortedContexts.find((context) => context.id === selectedContextId) ?? activeContext ?? sortedContexts[0];
+    sortedContexts.find((context) => context.id === selectedContextId) ?? sortedContexts[0];
   const contextChildren = selectedContext
     ? sortedContexts.filter((context) => context.parent_id === selectedContext.id)
     : [];
@@ -3824,11 +3831,9 @@ function ContextManagerReadSurface({
       <div className="context-manager">
         <Panel
           eyebrow="My Spaces"
-          title="No spaces are visible"
-          description={state.detail}
+          title="No spaces yet"
           actions={
             <div className="resource-view-actions">
-              <StatusPill tone={statusTone(state.status)} label={state.status} />
               {contextMutationSlot ? (
                 <button className="button" type="button" onClick={() => setMode("create")}>
                   Create
@@ -3841,7 +3846,7 @@ function ContextManagerReadSurface({
             contextMutationSlot
           ) : (
             <div className="empty-state">
-              Once this identity can see or manage a space, it will appear here. Other spaces remain hidden.
+              Spaces you have access to will appear here.
             </div>
           )}
         </Panel>
@@ -3861,13 +3866,6 @@ function ContextManagerReadSurface({
               : mode === "edit"
                 ? `Edit ${selectedContext?.name || "Space"}`
                 : `Archive ${selectedContext?.name || "Space"}`
-          }
-          description={
-            mode === "create"
-              ? "Create a new space from a dedicated form instead of mixing creation into the list."
-              : mode === "edit"
-                ? "Update the selected space from a dedicated form."
-                : "Archive the selected organization space without hard-deleting authority history."
           }
           actions={
             <button className="button button--ghost" type="button" onClick={() => setMode(mode === "create" ? "list" : "detail")}>
@@ -3899,7 +3897,6 @@ function ContextManagerReadSurface({
         <Panel
           eyebrow="Selected Space"
           title={selectedContext?.name || "No space selected"}
-          description="Use this view to understand where the space sits and what authority objects are visible inside it."
           actions={
             <div className="resource-view-actions">
               <button className="button button--ghost" type="button" onClick={() => setMode("list")}>
@@ -3921,12 +3918,6 @@ function ContextManagerReadSurface({
                   Archive
                 </button>
               ) : null}
-              {selectedContext ? (
-                <StatusPill
-                  tone={selectedContext.id === activeContextId ? "success" : "neutral"}
-                  label={selectedContext.id === activeContextId ? "current" : "visible"}
-                />
-              ) : null}
             </div>
           }
         >
@@ -3935,10 +3926,9 @@ function ContextManagerReadSurface({
               context={selectedContext}
               children={contextChildren}
               counts={contextCounts(selectedContext)}
-              activeContextId={activeContextId}
             />
           ) : (
-            <div className="empty-state">Select a visible space to inspect it.</div>
+            <div className="empty-state">Select a space to inspect it.</div>
           )}
         </Panel>
       </div>
@@ -3949,14 +3939,12 @@ function ContextManagerReadSurface({
     <div className="context-manager">
       <Panel
         eyebrow="My Spaces"
-        title={`${visibleContexts.length} visible space${visibleContexts.length === 1 ? "" : "s"}`}
-        description="These are the spaces visible to the active session scope. Other spaces are intentionally not shown here."
+        title="Spaces I have access to"
         actions={
           <div className="resource-view-actions">
-            <StatusPill tone={statusTone(state.status)} label={state.status} />
             {contextMutationSlot ? (
               <button className="button" type="button" onClick={() => setMode("create")}>
-                Create
+                Create Space
               </button>
             ) : null}
           </div>
@@ -3968,26 +3956,19 @@ function ContextManagerReadSurface({
             <input
               value={query}
               onChange={(event) => setQuery(event.currentTarget.value)}
-              placeholder="Search visible spaces"
+              placeholder="Search spaces"
               type="search"
             />
           </label>
-          {activeContext ? (
-            <div className="context-manager__active">
-              <span>Current space</span>
-              <strong>{activeContext.name || shortId(activeContext.id)}</strong>
-            </div>
-          ) : null}
         </div>
 
         <div className="context-card-list">
           {visibleContexts.map((context) => {
-            const { identityCount, badgeCount, directGrantCount, inheritedGrantCount } = contextCounts(context);
+            const { identityCount } = contextCounts(context);
             const selected = selectedContext?.id === context.id;
-            const active = activeContextId === context.id;
             return (
               <button
-                className={`context-card${selected ? " context-card--selected" : ""}${active ? " context-card--active" : ""}`}
+                className={`context-card${selected ? " context-card--selected" : ""}`}
                 key={context.id}
                 onClick={() => {
                   setSelectedContextId(context.id);
@@ -4002,14 +3983,11 @@ function ContextManagerReadSurface({
                   </span>
                 </span>
                 <span className="context-card__meta">
-                  {active ? <StatusPill tone="success" label="current" /> : null}
                   <StatusPill tone={context.parent_id ? "neutral" : "success"} label={context.parent_id ? "child" : "root"} />
                 </span>
                 <span className="context-card__stats">
                   <span>{identityCount} identities</span>
-                  <span>{badgeCount} access labels</span>
-                  <span>{directGrantCount + inheritedGrantCount} assignments</span>
-                  <span>{context.child_count ?? 0} children</span>
+                  <span>{context.child_count ?? 0} child spaces</span>
                 </span>
               </button>
             );
@@ -4024,7 +4002,6 @@ function ContextDetailView({
   context,
   children,
   counts,
-  activeContextId,
 }: {
   context: ContextReadModel;
   children: ContextReadModel[];
@@ -4034,7 +4011,6 @@ function ContextDetailView({
     directGrantCount: number;
     inheritedGrantCount: number;
   };
-  activeContextId?: string;
 }) {
   const isRoot = !context.parent_id;
   return (
@@ -4042,7 +4018,7 @@ function ContextDetailView({
       <div className="context-detail-hero">
         <div>
           <div className="context-detail-hero__label">
-            {context.id === activeContextId ? "Active operating space" : "Visible space"}
+            {context.kind ? `${context.kind} space` : "Space"}
           </div>
           <div className="context-detail-hero__title">{context.name || "Untitled context"}</div>
           <div className="context-detail-hero__body">
@@ -4086,7 +4062,7 @@ function ContextDetailView({
           </div>
           <div className="context-hierarchy__node">
             <span>Children</span>
-            <strong>{children.length ? children.map((child) => child.name || shortId(child.id)).join(", ") : "None visible"}</strong>
+            <strong>{children.length ? children.map((child) => child.name || shortId(child.id)).join(", ") : "None"}</strong>
           </div>
         </div>
       </div>
@@ -4107,7 +4083,7 @@ function ContextDetailView({
             <div className="kv__value">{context.depth ?? 0}</div>
           </div>
           <div className="kv">
-            <div className="kv__label">Visible children</div>
+            <div className="kv__label">Children</div>
             <div className="kv__value">{context.child_count ?? 0}</div>
           </div>
           <div className="kv">
