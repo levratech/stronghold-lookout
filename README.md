@@ -92,6 +92,8 @@ The reusable resource interface doctrine is captured in [`web/RESOURCE_INTERFACE
 lookout resources contract
 ```
 
+Lookout Web UI changes must follow [`docs/ui-rules.md`](docs/ui-rules.md). Treat the app as a task-focused control panel: list first, inspect one entity, act deliberately, confirm, and return to the list.
+
 ---
 
 ## Guiding Principles

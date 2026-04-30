@@ -32,6 +32,7 @@
     "browser_command_signing": "Level 3 Lookout Web signer lifecycle for active-principal command authorship, reachable from the upper-right account-tools Signing Keys link. Generates non-exportable native WebCrypto Ed25519 keys, stores the private CryptoKey in IndexedDB, registers only rawurl-base64 public key material with Sentry, selects matching active principal key records, and signs command payloads with active identity plus active principal binding before attaching X-Stronghold-Command-Auth.",
     "lookout_truth_panels": "Debug Cockpit and authority surfaces expose runtime truth indicators for transport grant source, credential expiry, permission-envelope shape, service permission-lane shape, in-tab NATS allow/deny probe results, signed delegated transport drill results, negative transport drill results, last observed denied rail/read/mutation action, active authority read rail, command-signer custody boundaries, and memory-only replay posture.",
     "resource_interface_contract": "LRI-01/LRI-02/LRI-03/LRI-04 reusable List/Create/Detail/Edit/Lifecycle shell and static contract route at /debug/resource-interface. The shared shell is now mode-driven: list many, select one detail view, then enter create/edit/lifecycle as intentional screens rather than rendering all verbs simultaneously. It defines resource record summaries, selected-record detail posture, relationship cards, raw-id inspectability, empty/error states, confirmation-backed lifecycle action placement, evidence feedback, quick filtering, basic sorting, and visible-column toggles over loaded records without pretending to provide backend/global search yet.",
+    "ui_rules": "docs/ui-rules.md is the canonical Lookout Web UI doctrine. Future UI work should refactor from dashboard-thinking to resource-management-thinking with strict LCRUD task lanes: list, inspect, act, confirm, and return to list.",
     "config_templates": "Tracked JSON files remain examples/templates rather than live estate truth.",
     "context_manager_read_surface": "CAM-01/LRI-05/CGX-01 product-facing Spaces manager read surface. The context route uses a simplified list-first space manager titled Spaces I have access to; selected spaces open as a single detail screen with back/edit/archive actions, and create/edit/archive are dedicated screens. It keeps hierarchy, kind, child count, identity count, access-label counts, assignment counts, and raw IDs available without putting read status, current-context posture, or unrelated security-model narration in the primary UI.",
     "context_manager_mutation_surface": "CAM-02/CGX-01/CGX-02/CGX-06 product-facing Spaces manager mutation surface. Space create uses a type-aware form for child, organization, and personal spaces so irrelevant parent/domain fields are hidden instead of explained as invalid options; edit hides implementation IDs; archive remains a soft-delete lifecycle screen for organization spaces with no children. Context submissions carry the expanded context metadata contract, retain context.create compatibility and typed support for context.transfer_ownership and context.archive, suppress invalid parent/domain payloads for root/personal operations, and attach Level 3 browser command-auth signatures according to backend Sentry enforcement instead of relying on session authorization alone.",
@@ -63,6 +64,7 @@
     "Static module registration is intentional and keeps the cockpit structure stable without runtime plugin machinery.",
     "Lookout displays principal, badge, service, key, audit, transport, grant, signer, read-rail, and replay posture and can submit controlled Sentry mutations; it does not own principal key registration, envelope verification, badge truth, service binding truth, audit truth, replay truth, or authority issuance.",
     "Authority resource screens must preserve the list-many/read-one flow: navigation opens a list, row selection opens one detail view, and create/edit/lifecycle actions open dedicated screens or modals rather than side-by-side doctrine/debug panels.",
+    "Before changing Lookout Web UI, read docs/ui-rules.md and preserve the task-focused control-panel model.",
     "Read-first Sentry/Aegis pages should stay honest about backend gaps rather than implying mature browser-admin APIs exist."
   ],
   "known_risks": [
@@ -77,6 +79,7 @@
   ],
   "read_order": [
     "README.md",
+    "docs/ui-rules.md",
     "web/README.md",
     "web/RESOURCE_INTERFACE_EVIDENCE.md",
     "web/IMPLEMENTATION_NOTES.md",
@@ -104,6 +107,7 @@
   ],
   "important_files": [
     "README.md",
+    "docs/ui-rules.md",
     "cmd/lookout/main.go",
     "internal/lookout/doc.go",
     "internal/lookout/tools.go",
@@ -199,6 +203,7 @@
   },
   "files": [
     ".gitignore",
+    "docs/ui-rules.md",
     "LICENSE",
     "README.md",
     "REPO_MAP.json",
