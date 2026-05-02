@@ -23,6 +23,7 @@ const defaultSnapshot: SessionSnapshot = {
   account: null,
   identity: null,
   context: null,
+  interfaceMode: "unknown",
   root: null,
   activePrincipal: null,
   badgeSummary: {
@@ -67,6 +68,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         account: null,
         identity: null,
         context: null,
+        interfaceMode: "unknown",
         root: null,
         activePrincipal: null,
         badgeSummary: {
@@ -105,6 +107,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         account: snapshot.account,
         identity: snapshot.identity,
         context: snapshot.context,
+        interfaceMode: snapshot.interfaceMode,
         root: snapshot.root,
         activePrincipal: snapshot.activePrincipal,
         badgeSummary: snapshot.badgeSummary,
@@ -127,6 +130,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       account: snapshot.account,
       identity: snapshot.identity,
       context: snapshot.context,
+      interfaceMode: snapshot.interfaceMode,
       root: snapshot.root,
       activePrincipal: snapshot.activePrincipal,
       badgeSummary: snapshot.badgeSummary,
@@ -156,6 +160,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
           account: null,
           identity: null,
           context: null,
+          interfaceMode: "unknown",
           root: null,
           activePrincipal: null,
           badgeSummary: {

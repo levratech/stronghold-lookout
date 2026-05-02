@@ -15,6 +15,8 @@ export type PrincipalType =
   | "ephemeral"
   | "unknown";
 
+export type InterfaceMode = "user" | "system" | "public" | "unknown";
+
 export interface PrincipalIdentity {
   accountId?: string;
   identityId?: string;
@@ -28,6 +30,7 @@ export interface PrincipalIdentity {
   badgeIds: string[];
   roles: string[];
   interfaceId?: string;
+  interfaceMode?: InterfaceMode;
 }
 
 export interface RootSessionIdentity extends PrincipalIdentity {}
@@ -43,6 +46,7 @@ export interface ContextSessionState {
   realmId?: string;
   domainId?: string;
   interfaceId?: string;
+  interfaceMode?: InterfaceMode;
 }
 
 export interface BadgeSummary {
@@ -83,6 +87,7 @@ export interface SessionSnapshot {
   account: AccountSessionIdentity | null;
   identity: PrincipalIdentity | null;
   context: ContextSessionState | null;
+  interfaceMode: InterfaceMode;
   root: RootSessionIdentity | null;
   activePrincipal: PrincipalIdentity | null;
   badgeSummary: BadgeSummary;

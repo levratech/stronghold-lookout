@@ -1,6 +1,7 @@
 import { lookoutEnvironment } from "../../env";
 import type {
   BrowserTransportGrantResponse,
+  InterfaceMode,
   PrincipalType,
   SessionSnapshot,
   SessionTransportState,
@@ -87,7 +88,19 @@ function normalizeIdentity(raw: Record<string, unknown> | null | undefined) {
     badgeIds,
     roles,
     interfaceId: typeof raw.interface_id === "string" ? raw.interface_id : undefined,
+    interfaceMode: normalizeInterfaceMode(raw.interface_mode),
   };
+}
+
+function normalizeInterfaceMode(value: unknown): InterfaceMode {
+  switch (value) {
+    case "user":
+    case "system":
+    case "public":
+      return value;
+    default:
+      return "unknown";
+  }
 }
 
 function normalizePrincipalType(value: unknown): PrincipalType {
@@ -119,6 +132,7 @@ export async function fetchSessionSnapshot(signal?: AbortSignal): Promise<Sessio
       account: null,
       identity: null,
       context: null,
+      interfaceMode: "unknown",
       root: null,
       activePrincipal: null,
       badgeSummary: {
@@ -144,6 +158,7 @@ export async function fetchSessionSnapshot(signal?: AbortSignal): Promise<Sessio
       account: null,
       identity: null,
       context: null,
+      interfaceMode: "unknown",
       root: null,
       activePrincipal: null,
       badgeSummary: {
@@ -214,8 +229,10 @@ export async function fetchSessionSnapshot(signal?: AbortSignal): Promise<Sessio
           domainId: typeof rawContext.domain_id === "string" ? rawContext.domain_id : undefined,
           interfaceId:
             typeof rawContext.interface_id === "string" ? rawContext.interface_id : undefined,
+          interfaceMode: normalizeInterfaceMode(rawContext.interface_mode),
         }
       : null,
+    interfaceMode: normalizeInterfaceMode(payload.interface_mode),
     root,
     activePrincipal,
     badgeSummary: {
@@ -294,6 +311,7 @@ export function sessionHintSnapshot(): SessionSnapshot {
       account: null,
       identity: null,
       context: null,
+      interfaceMode: "unknown",
       root: null,
       activePrincipal: null,
       badgeSummary: {
@@ -315,6 +333,7 @@ export function sessionHintSnapshot(): SessionSnapshot {
     account: null,
     identity: null,
     context: null,
+    interfaceMode: "unknown",
     root: null,
     activePrincipal: null,
     badgeSummary: {
