@@ -98,6 +98,15 @@ const authorityModules = lookoutModules.filter((module) =>
   module.route.startsWith("/authority/"),
 );
 
+function isUserVisibleContext(context: ContextReadModel, interfaceMode: string) {
+  if (interfaceMode === "system") {
+    return true;
+  }
+  const name = (context.name ?? "").toLowerCase();
+  const looksLikeFixture = name.includes("smoke") || name.includes("fixture") || name.includes("test-only");
+  return context.kind !== "system" && !looksLikeFixture;
+}
+
 const contextPermissionCatalog = [
   "context.read",
   "context.admin",
@@ -565,14 +574,17 @@ export function AuthorityPlaceholderPage() {
             readBadgeDefinitions(controller.signal, scopedFilters.context, authorityReadTransport),
             readBadgeGrants(controller.signal, scopedFilters.principalContext, authorityReadTransport),
           ]);
+          const visibleContexts = contexts.items.filter((context) =>
+            isUserVisibleContext(context, snapshot.interfaceMode),
+          );
           setReadState({
-            status: contexts.items.length ? "ready" : "empty",
-            detail: contexts.items.length
+            status: visibleContexts.length ? "ready" : "empty",
+            detail: visibleContexts.length
               ? `Spaces loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
               : "No spaces were returned for this session scope.",
             accounts: [],
             authMethods: [],
-            contexts: contexts.items,
+            contexts: visibleContexts,
             identities: identities.items,
             badges: badges.items,
             principals: [],

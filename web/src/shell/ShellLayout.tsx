@@ -29,6 +29,15 @@ interface WorkspaceContextState {
   topLevelContexts: ContextReadModel[];
 }
 
+function isUserVisibleContext(context: ContextReadModel, interfaceMode: string) {
+  if (interfaceMode === "system") {
+    return true;
+  }
+  const name = (context.name ?? "").toLowerCase();
+  const looksLikeFixture = name.includes("smoke") || name.includes("fixture") || name.includes("test-only");
+  return context.kind !== "system" && !looksLikeFixture;
+}
+
 function isLookoutModule(module: LookoutModuleDefinition | undefined): module is LookoutModuleDefinition {
   return Boolean(module);
 }
@@ -128,7 +137,9 @@ export function ShellLayout() {
         contextResponses.flatMap((response) => response.items).forEach((context) => {
           contextsById.set(context.id, context);
         });
-        const contexts = [...contextsById.values()].sort(compareContexts);
+        const contexts = [...contextsById.values()]
+          .filter((context) => isUserVisibleContext(context, snapshot.interfaceMode))
+          .sort(compareContexts);
         const personalContext =
           contexts.find(
             (context) =>
@@ -136,7 +147,11 @@ export function ShellLayout() {
               (!context.owner_identity_id || identityIds.has(context.owner_identity_id)),
           ) ?? contexts.find((context) => context.kind === "personal");
         const topLevelContexts = contexts.filter(
-          (context) => !context.parent_id && context.id !== personalContext?.id && context.kind !== "personal",
+          (context) =>
+            !context.parent_id &&
+            context.id !== personalContext?.id &&
+            context.kind !== "personal" &&
+            context.kind !== "system",
         );
         setWorkspaceContexts({
           status: "ready",
@@ -160,7 +175,7 @@ export function ShellLayout() {
 
     void loadWorkspaceContexts();
     return () => controller.abort();
-  }, [activeAccountId, snapshot.status]);
+  }, [activeAccountId, snapshot.interfaceMode, snapshot.status]);
 
   const operatorSummary =
     activePrincipal?.email ??
