@@ -93,7 +93,7 @@ export function ShellLayout() {
   const activeAccountId = activePrincipal?.accountId ?? snapshot.account?.accountId ?? root?.accountId ?? "";
   const [workspaceContexts, setWorkspaceContexts] = useState<WorkspaceContextState>({
     status: "idle",
-    detail: "Space rail has not loaded yet.",
+    detail: "Scope rail has not loaded yet.",
     topLevelContexts: [],
   });
 
@@ -101,7 +101,7 @@ export function ShellLayout() {
     if (snapshot.status !== "authenticated" || !activeAccountId) {
       setWorkspaceContexts({
         status: "idle",
-        detail: "Login to see Home and your accessible spaces.",
+        detail: "Login to see Home and your accessible scopes.",
         topLevelContexts: [],
       });
       return;
@@ -110,7 +110,7 @@ export function ShellLayout() {
     const controller = new AbortController();
     setWorkspaceContexts({
       status: "loading",
-      detail: "Loading your spaces.",
+      detail: "Loading your scopes.",
       topLevelContexts: [],
     });
 
@@ -156,8 +156,8 @@ export function ShellLayout() {
         setWorkspaceContexts({
           status: "ready",
           detail: contextIds.length
-            ? "Loaded spaces tied to your account identities."
-            : "No space identities are visible for this account yet.",
+            ? "Loaded scopes tied to your account identities."
+            : "No scope identities are visible for this account yet.",
           personalContext,
           topLevelContexts,
         });
@@ -167,7 +167,7 @@ export function ShellLayout() {
         }
         setWorkspaceContexts({
           status: "error",
-          detail: error instanceof Error ? error.message : "Unable to load workspace spaces.",
+          detail: error instanceof Error ? error.message : "Unable to load accessible scopes.",
           topLevelContexts: [],
         });
       }
@@ -202,7 +202,7 @@ export function ShellLayout() {
             <div className="topbar__eyebrow">{lookoutEnvironment.estateName}</div>
             <div className="topbar__name">{lookoutEnvironment.cockpitName}</div>
             <div className="topbar__subtitle">
-              Same-origin control surface for spaces, access, domains, and authority diagnostics.
+              Same-origin control surface for Home, scopes, access, portals, and authority diagnostics.
             </div>
           </div>
         </div>
@@ -299,13 +299,13 @@ export function ShellLayout() {
                   </NavLink>
                 ) : (
                   <div className={`workspace-nav__empty workspace-nav__empty--${workspaceContexts.status}`}>
-                    {workspaceContexts.status === "loading" ? "Loading Home..." : "Home space not visible yet."}
+                    {workspaceContexts.status === "loading" ? "Loading Home..." : "Home scope not visible yet."}
                   </div>
                 )}
               </div>
 
               <div className="workspace-nav">
-                <div className="workspace-nav__label">Spaces</div>
+                <div className="workspace-nav__label">Scopes</div>
                 {workspaceContexts.topLevelContexts.length ? (
                   <div className="workspace-nav__contexts">
                     {workspaceContexts.topLevelContexts.map((context) => (
@@ -316,9 +316,9 @@ export function ShellLayout() {
                       >
                         <div className="nav-link__icon">{contextInitials(context)}</div>
                         <div className="nav-link__text">
-                          <div className="nav-link__title">{context.name || "Untitled context"}</div>
+                          <div className="nav-link__title">{context.name || "Untitled scope"}</div>
                           <div className="nav-link__description">
-                            {context.child_count ? `${context.child_count} child spaces` : "Top-level space"}
+                            {context.child_count ? `${context.child_count} child scopes` : "Top-level scope"}
                           </div>
                         </div>
                       </NavLink>
@@ -327,10 +327,10 @@ export function ShellLayout() {
                 ) : (
                   <div className={`workspace-nav__empty workspace-nav__empty--${workspaceContexts.status}`}>
                     {workspaceContexts.status === "loading"
-                      ? "Loading spaces..."
+                      ? "Loading scopes..."
                       : workspaceContexts.status === "error"
-                        ? "Unable to load spaces."
-                      : "No top-level spaces visible."}
+                        ? "Unable to load scopes."
+                      : "No top-level scopes visible."}
                   </div>
                 )}
               </div>

@@ -137,29 +137,29 @@ const surfaceNotes: Record<string, string[]> = {
     "Provider subjects and password material stay redacted; status changes alter account access posture only.",
   ],
   identities: [
-    "Show identity records linked to accounts and contexts.",
+    "Show identity records linked to accounts and scopes.",
     "Surface paired principal IDs and lineage without collapsing identity into user.",
     "Preserve root versus active principal language from session bootstrap.",
   ],
   contexts: [
-    "Show the context tree and current context scope.",
-    "Make context boundaries explicit before badge and identity mutation work begins.",
+    "Show the scope tree and current scope boundary.",
+    "Make scope boundaries explicit before badge and identity mutation work begins.",
     "Use dedicated create, detail, edit, and archive screens rather than raw CRUD widgets.",
   ],
   badges: [
-    "Show context-scoped badge definitions.",
+    "Show scope-scoped badge definitions.",
     "Explain badges as authority labels, not implicit permissions by ownership.",
     "Defer badge creation and editing to controlled mutation phases.",
   ],
   grants: [
     "Show explicit badge grants to principals.",
-    "Include direct/subtree scope, inherited posture, effective context, and revoked state when available.",
+    "Include direct/subtree scope, inherited posture, effective scope, and revoked state when available.",
     "Make account sibling identity leakage visually obvious instead of implying grants are account-wide.",
   ],
   services: [
-    "Show service definitions separately from context service bindings.",
+    "Show service definitions separately from scope service bindings.",
     "Provision service principals with service-held public keys only; never paste private key material.",
-    "Expose permission lane posture as badge-scoped, context-bound service visibility.",
+    "Expose permission lane posture as badge-scoped, scope-bound service visibility.",
   ],
   principals: [
     "Show principal types: human, node/service/app/agent, system, and ephemeral.",
@@ -304,7 +304,7 @@ function liveSurfaceLabel(moduleId: string) {
     case "identities":
       return "People And Identities";
     case "contexts":
-      return "Spaces";
+      return "Scopes";
     case "badges":
       return "Access Labels";
     case "principals":
@@ -580,8 +580,8 @@ export function AuthorityPlaceholderPage() {
           setReadState({
             status: visibleContexts.length ? "ready" : "empty",
             detail: visibleContexts.length
-              ? `Spaces loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
-              : "No spaces were returned for this session scope.",
+              ? `Scopes loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
+              : "No scopes were returned for this session scope.",
             accounts: [],
             authMethods: [],
             contexts: visibleContexts,
@@ -681,8 +681,8 @@ export function AuthorityPlaceholderPage() {
           setReadState({
             status: definitions.items.length || bindings.items.length ? "ready" : "empty",
             detail: definitions.items.length || bindings.items.length
-              ? `Service definitions and context bindings loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
-              : "No service definitions or context service bindings were returned for this session scope.",
+              ? `Service definitions and scope bindings loaded through ${authorityReadTransport ? "browser NATS" : "Sentry authority reads"}.`
+              : "No service definitions or scope service bindings were returned for this session scope.",
             accounts: [],
             authMethods: [],
             contexts: [],
@@ -881,7 +881,7 @@ export function AuthorityPlaceholderPage() {
         : !activePrincipal?.principalId
           ? "No active principal is resolved for this session yet."
         : module.id === "contexts" && !signingOptions
-          ? "Context lifecycle actions require a ready browser command-signing key for the active principal."
+          ? "Scope lifecycle actions require a ready browser command-signing key for the active principal."
           : module.id === "providers" && !signingOptions
             ? "White-label interface and domain lifecycle actions require a ready browser command-signing key for the active principal."
           : undefined;
@@ -1750,7 +1750,7 @@ function DelegatedTransportDrillPanel({
             <input value={foreignPrincipalId} onChange={(event) => setForeignPrincipalId(event.currentTarget.value)} placeholder="Unowned runtime principal for denial check" />
           </label>
           <label>
-            Active Context
+            Active Scope
             <input value={activeContextId ?? "Unavailable"} readOnly />
           </label>
         </div>
@@ -1824,7 +1824,7 @@ function AccountMutationFields({ defaultDomainId }: { defaultDomainId: string })
   return (
     <div className="authority-form__grid">
       <label>
-        Login namespace / default context
+        Login namespace / default scope
         <input name="domain_id" defaultValue={defaultDomainId} required />
       </label>
       <label>
@@ -1874,7 +1874,7 @@ function AuthMethodMutationFields({
         <input name="method_id" placeholder="Required for status/revoke, optional for link" />
       </label>
       <label>
-        Login namespace / default context
+        Login namespace / default scope
         <input name="domain_id" defaultValue={defaultDomainId} />
       </label>
       <label>
@@ -1935,12 +1935,12 @@ function IdentityMutationFields({
         </select>
       </label>
       <label>
-        Context
+        Scope
         <select name="context_id" required defaultValue={defaultContextId}>
           {contexts.map((context) => (
             <option value={context.id} key={context.id}>{context.name || context.id}</option>
           ))}
-          {!contexts.length ? <option value={defaultContextId}>{defaultContextId || "No context loaded"}</option> : null}
+          {!contexts.length ? <option value={defaultContextId}>{defaultContextId || "No scope loaded"}</option> : null}
         </select>
       </label>
       <label>
@@ -1990,10 +1990,10 @@ function IdentityMutationFields({
         <input name="service_key" placeholder="Required for service subjects" />
       </label>
       <label>
-        Personal Context
+        Personal Scope
         <select name="personal_context_requested" defaultValue="false">
           <option value="false">do not create</option>
-          <option value="true">create personal context</option>
+          <option value="true">create personal scope</option>
         </select>
       </label>
     </div>
@@ -2030,7 +2030,7 @@ function PrincipalMutationFields({
         </select>
       </label>
       <label>
-        Context ID
+        Scope ID
         <input name="context_id" defaultValue={defaultContextId} />
       </label>
       <label>
@@ -2060,9 +2060,9 @@ function ContextMutationFields({
         <input name="context_command" type="hidden" value="context.archive" />
         <input name="context_id" type="hidden" value={selectedContext.id} />
         <div className="state-notice state-notice--warning authority-form__wide">
-          <div className="state-notice__title">Archive {selectedContext.name || "this space"}?</div>
+          <div className="state-notice__title">Archive {selectedContext.name || "this scope"}?</div>
           <div className="state-notice__body">
-            This is a soft archive, not a hard delete. The space will disappear from normal lists, but audit evidence and stored authority history remain intact.
+            This is a soft archive, not a hard delete. The scope will disappear from normal lists, but audit evidence and stored authority history remain intact.
           </div>
         </div>
       </div>
@@ -2075,12 +2075,12 @@ function ContextMutationFields({
         <input name="context_command" type="hidden" value="context.update" />
         <input name="context_id" type="hidden" value={selectedContext.id} />
         <label>
-          Space name
+          Scope name
           <input name="name" required defaultValue={selectedContext.name} />
         </label>
         <label>
           Description
-          <textarea name="description" defaultValue={selectedContext.description ?? ""} placeholder="What is this context for?" />
+          <textarea name="description" defaultValue={selectedContext.description ?? ""} placeholder="What is this scope for?" />
         </label>
         {selectedContext.kind === "organization" ? (
           <label>
@@ -2089,9 +2089,9 @@ function ContextMutationFields({
           </label>
         ) : null}
         <div className="state-notice">
-          <div className="state-notice__title">Editing {selectedContext.kind ?? "space"} details</div>
+          <div className="state-notice__title">Editing {selectedContext.kind ?? "scope"} details</div>
           <div className="state-notice__body">
-            The space ID is kept out of the form and submitted behind the scenes.
+            The scope ID is kept out of the form and submitted behind the scenes.
           </div>
         </div>
       </div>
@@ -2101,25 +2101,25 @@ function ContextMutationFields({
   return (
     <div className="authority-form__grid">
       <label>
-        Space type
+        Scope type
         <select
           name="context_command"
           required
           value={createCommand}
           onChange={(event) => setCreateCommand(event.currentTarget.value)}
         >
-          <option value="context.create_child">Child space</option>
-          <option value="context.create_org_root">Organization space</option>
-          <option value="context.create_personal_root">Personal space</option>
+          <option value="context.create_child">Child scope</option>
+          <option value="context.create_org_root">Organization scope</option>
+          <option value="context.create_personal_root">Personal scope</option>
         </select>
       </label>
       <label>
-        Space name
+        Scope name
         <input name="name" required placeholder="Example: Goldmine Dezine" />
       </label>
       <label>
         Description
-        <textarea name="description" placeholder="What is this space for?" />
+        <textarea name="description" placeholder="What is this scope for?" />
       </label>
       {createCommand === "context.create_child" ? (
         <label>
@@ -2170,9 +2170,9 @@ function BadgeMutationFields({
         </datalist>
       </label>
       <label>
-        Context ID
+        Scope ID
         <select name="context_id" defaultValue={defaultContextId}>
-          <option value={defaultContextId}>Active context ({defaultContextId})</option>
+          <option value={defaultContextId}>Active scope ({defaultContextId})</option>
           {contexts.map((context) => (
             <option value={context.id} key={context.id}>{context.name || context.id}</option>
           ))}
@@ -2244,7 +2244,7 @@ function GrantMutationFields({
         </datalist>
       </label>
       <label>
-        Context ID
+        Scope ID
         <input name="context_id" defaultValue={defaultContextId} required />
       </label>
       <label>
@@ -2288,7 +2288,7 @@ function ServiceProvisionFields({
         <input name="name" placeholder="Files" />
       </label>
       <label>
-        Context ID
+        Scope ID
         <input name="context_id" defaultValue={defaultContextId} />
       </label>
       <label>
@@ -2359,7 +2359,7 @@ function ServiceProvisionFields({
       </label>
       <label className="authority-form__wide">
         Description
-        <input name="description" placeholder="What does this service do in the context?" />
+        <input name="description" placeholder="What does this service do in the scope?" />
       </label>
       <label className="authority-form__wide">
         Service Public Key
@@ -2829,15 +2829,15 @@ function mutationTitle(moduleId: string, contextMode?: "create" | "edit" | "arch
       return "Create Durable Principal";
     case "contexts":
       if (contextMode === "archive") {
-        return "Archive Space";
+        return "Archive Scope";
       }
-      return "New Or Edit Space";
+      return "New Or Edit Scope";
     case "badges":
       return "Create, Update, Or Archive Access Label";
     case "grants":
       return "Assign Or Revoke Access";
     case "services":
-      return "Provision Context Service";
+      return "Provision Scope Service";
     case "providers":
       return "Manage Interface Domains And Provider Posture";
     case "keys":
@@ -2851,15 +2851,15 @@ function mutationDescription(moduleId: string, contextMode?: "create" | "edit" |
   switch (moduleId) {
     case "contexts":
       if (contextMode === "archive") {
-        return "Soft-archive an organization space after its children have been handled. Nothing is hard-deleted.";
+        return "Soft-archive an organization scope after its children have been handled. Nothing is hard-deleted.";
       }
-      return "Create a child space under one you manage, or rename an existing space. Raw IDs stay secondary.";
+      return "Create a child scope under one you manage, or rename an existing scope. Raw IDs stay secondary.";
     case "badges":
-      return "Create or archive space-bound access labels. Badges remain the underlying authority definition and stay scoped to the space where they are defined.";
+      return "Create or archive scope-bound access labels. Badges remain the underlying authority definition and stay scoped to the scope where they are defined.";
     case "grants":
-      return "Assign or revoke an access label for a specific identity/principal inside the selected space scope.";
+      return "Assign or revoke an access label for a specific identity/principal inside the selected scope.";
     case "services":
-      return "Provision a service binding and service-held public key for the current context lane.";
+      return "Provision a service binding and service-held public key for the current scope lane.";
     case "providers":
       return "Create and lifecycle domain bindings, then store redacted provider config references for Sentry private materialization.";
     case "keys":
@@ -2873,9 +2873,9 @@ function mutationSubmitLabel(moduleId: string, contextMode?: "create" | "edit" |
   switch (moduleId) {
     case "contexts":
       if (contextMode === "archive") {
-        return "Archive Space";
+        return "Archive Scope";
       }
-      return "Save Space";
+      return "Save Scope";
     case "badges":
       return "Save Access Label";
     case "grants":
@@ -3080,7 +3080,7 @@ function PrincipalList({
       ],
       fields: [
         { label: "Principal Type", value: principal.principal_type },
-        { label: "Context", value: principal.context_id ?? "none" },
+        { label: "Scope", value: principal.context_id ?? "none" },
         { label: "Account", value: principal.account_id ?? "none" },
         { label: "Minted By", value: principal.minted_by_principal_id ?? "authority" },
         { label: "Authority Root", value: principal.authority_root_principal_id ?? "self" },
@@ -3120,10 +3120,10 @@ function PrincipalList({
     },
     {
       id: "context",
-      label: "Context",
-      render: (record) => <span className="resource-list__id">{record.fields?.find((field) => field.label === "Context")?.value}</span>,
-      sortValue: (record) => String(record.fields?.find((field) => field.label === "Context")?.value ?? ""),
-      searchValue: (record) => String(record.fields?.find((field) => field.label === "Context")?.value ?? ""),
+      label: "Scope",
+      render: (record) => <span className="resource-list__id">{record.fields?.find((field) => field.label === "Scope")?.value}</span>,
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Scope")?.value ?? ""),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Scope")?.value ?? ""),
     },
     {
       id: "status",
@@ -3199,8 +3199,8 @@ function GrantList({
         { label: "Principal", value: grant.principal_id },
         { label: "Identity", value: identity?.id ?? "not resolved" },
         { label: "Principal Type", value: principal?.principal_type ?? "unknown" },
-        { label: "Context", value: grant.context_id },
-        { label: "Effective Context", value: grant.effective_context_id ?? grant.context_id },
+        { label: "Scope", value: grant.context_id },
+        { label: "Effective Scope", value: grant.effective_context_id ?? grant.context_id },
         { label: "Scope", value: grant.scope_mode ?? "direct" },
         { label: "Permission", value: grant.permission },
         { label: "Reason", value: grant.reason ?? "not recorded" },
@@ -3216,15 +3216,15 @@ function GrantList({
         {
           label: "Badge definition",
           value: badge?.name ?? grant.badge_id,
-          detail: "The badge defines the label being granted inside its context.",
+          detail: "The badge defines the label being granted inside its scope.",
           tone: badge ? "success" : "warning",
         },
         {
           label: "Scope mode",
           value: grant.scope_mode ?? "direct",
           detail: grant.inherited
-            ? "This grant is inherited into the effective context during read/evaluation."
-            : "This grant applies directly at its recorded context.",
+            ? "This grant is inherited into the effective scope during read/evaluation."
+            : "This grant applies directly at its recorded scope.",
           tone: grant.inherited ? "warning" : "neutral",
         },
       ],
@@ -3333,7 +3333,7 @@ function ServiceBindingList({
         { label: "Service", value: definition?.name ?? binding.service_id },
         { label: "Service ID", value: binding.service_id },
         { label: "Service Key", value: definition?.service_key ?? binding.service_key ?? "unknown" },
-        { label: "Context", value: binding.context_id },
+        { label: "Scope", value: binding.context_id },
         { label: "Scope", value: binding.scope_mode },
         { label: "Status", value: binding.status },
         { label: "Permission Lane", value: lane },
@@ -3349,7 +3349,7 @@ function ServiceBindingList({
         {
           label: "Service definition",
           value: definition?.name ?? binding.service_id,
-          detail: "A shared service definition can bind into many contexts without one process per context.",
+          detail: "A shared service definition can bind into many scopes without one process per scope.",
           tone: definition ? "success" : "warning",
         },
       ],
@@ -3361,7 +3361,7 @@ function ServiceBindingList({
     .map((definition) => ({
       id: definition.id,
       title: definition.name || definition.service_key,
-      subtitle: "service definition without visible context binding",
+      subtitle: "service definition without visible scope binding",
       status: "definition",
       statusTone: "neutral",
       tags: ["definition", definition.service_key],
@@ -3372,9 +3372,9 @@ function ServiceBindingList({
       ],
       relationships: [
         {
-          label: "Context binding",
+          label: "Scope binding",
           value: "not visible",
-          detail: "This service definition has no active context binding in the loaded result set.",
+          detail: "This service definition has no active scope binding in the loaded result set.",
           tone: "neutral",
         },
       ],
@@ -3391,10 +3391,10 @@ function ServiceBindingList({
     },
     {
       id: "context",
-      label: "Context",
-      render: (record) => record.fields?.find((field) => field.label === "Context")?.value ?? "not bound",
-      sortValue: (record) => String(record.fields?.find((field) => field.label === "Context")?.value ?? ""),
-      searchValue: (record) => String(record.fields?.find((field) => field.label === "Context")?.value ?? ""),
+      label: "Scope",
+      render: (record) => record.fields?.find((field) => field.label === "Scope")?.value ?? "not bound",
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Scope")?.value ?? ""),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Scope")?.value ?? ""),
     },
     {
       id: "status",
@@ -3419,7 +3419,7 @@ function ServiceBindingList({
     <ResourceInterfaceShell
       eyebrow="Diagnostics"
       title="Service Binding Diagnostics"
-      summary="Shared service definitions and context service bindings with badge-scoped permission lane posture."
+      summary="Shared service definitions and scope service bindings with badge-scoped permission lane posture."
       state={state}
       records={records}
       listColumns={columns}
@@ -3491,8 +3491,8 @@ function WhiteLabelInterfaceManager({
         { label: "Interface ID", value: iface.id },
         { label: "Interface Key", value: iface.interface_key },
         { label: "Account Namespace", value: namespace?.name ?? iface.account_namespace_id },
-        { label: "Owning Context", value: owningContext?.name ?? iface.owning_context_id },
-        { label: "Default Login Context", value: contextsByID.get(iface.default_context_id)?.name ?? iface.default_context_id },
+        { label: "Owning Scope", value: owningContext?.name ?? iface.owning_context_id },
+        { label: "Default Login Scope", value: contextsByID.get(iface.default_context_id)?.name ?? iface.default_context_id },
         { label: "Domains", value: interfaceDomains.map((domain) => domain.hostname).join(", ") || "none" },
         { label: "Providers", value: interfaceProviders.map((provider) => provider.provider).join(", ") || "none" },
       ],
@@ -3570,7 +3570,7 @@ function WhiteLabelInterfaceManager({
     <ResourceInterfaceShell
       eyebrow="Portals"
       title="Portals And Domains"
-      summary="Organization-owned portal posture, domain bindings, and redacted auth-provider configuration. Personal Home spaces do not show domain authority controls here."
+      summary="Organization-owned portal posture, domain bindings, and redacted auth-provider configuration. Personal Home scopes do not show domain authority controls here."
       state={state}
       records={[...records, ...domainRecords]}
       listColumns={columns}
@@ -3850,8 +3850,8 @@ function ContextManagerReadSurface({
     return (
       <div className="context-manager">
         <Panel
-          eyebrow="My Spaces"
-          title="No spaces yet"
+          eyebrow="My Scopes"
+          title="No scopes yet"
           actions={
             <div className="resource-view-actions">
               {contextMutationSlot ? (
@@ -3866,7 +3866,7 @@ function ContextManagerReadSurface({
             contextMutationSlot
           ) : (
             <div className="empty-state">
-              Spaces you have access to will appear here.
+              Scopes you have access to will appear here.
             </div>
           )}
         </Panel>
@@ -3882,10 +3882,10 @@ function ContextManagerReadSurface({
           eyebrow={modeLabel}
           title={
             mode === "create"
-              ? "Create Space"
+              ? "Create Scope"
               : mode === "edit"
-                ? `Edit ${selectedContext?.name || "Space"}`
-                : `Archive ${selectedContext?.name || "Space"}`
+                ? `Edit ${selectedContext?.name || "Scope"}`
+                : `Archive ${selectedContext?.name || "Scope"}`
           }
           actions={
             <button className="button button--ghost" type="button" onClick={() => setMode(mode === "create" ? "list" : "detail")}>
@@ -3895,7 +3895,7 @@ function ContextManagerReadSurface({
         >
           {contextMutationSlot ?? (
             <div className="empty-state">
-              Space create and edit controls are not mounted yet.
+              Scope create and edit controls are not mounted yet.
             </div>
           )}
         </Panel>
@@ -3908,15 +3908,15 @@ function ContextManagerReadSurface({
       selectedContext?.kind === "organization" && (selectedContext.child_count ?? contextChildren.length) === 0;
     const archiveUnavailableReason =
       selectedContext?.kind === "personal" || selectedContext?.kind === "system"
-        ? "Personal and system contexts are protected."
+        ? "Personal and system scopes are protected."
         : (selectedContext?.child_count ?? contextChildren.length) > 0
-          ? "Archive child contexts first."
+          ? "Archive child scopes first."
           : undefined;
     return (
       <div className="context-manager">
         <Panel
-          eyebrow="Selected Space"
-          title={selectedContext?.name || "No space selected"}
+          eyebrow="Selected Scope"
+          title={selectedContext?.name || "No scope selected"}
           actions={
             <div className="resource-view-actions">
               <button className="button button--ghost" type="button" onClick={() => setMode("list")}>
@@ -3948,7 +3948,7 @@ function ContextManagerReadSurface({
               counts={contextCounts(selectedContext)}
             />
           ) : (
-            <div className="empty-state">Select a space to inspect it.</div>
+            <div className="empty-state">Select a scope to inspect it.</div>
           )}
         </Panel>
       </div>
@@ -3958,13 +3958,13 @@ function ContextManagerReadSurface({
   return (
     <div className="context-manager">
       <Panel
-        eyebrow="My Spaces"
-        title="Spaces I have access to"
+        eyebrow="My Scopes"
+        title="Scopes I have access to"
         actions={
           <div className="resource-view-actions">
             {contextMutationSlot ? (
               <button className="button" type="button" onClick={() => setMode("create")}>
-                Create Space
+                Create Scope
               </button>
             ) : null}
           </div>
@@ -3972,11 +3972,11 @@ function ContextManagerReadSurface({
       >
         <div className="context-manager__toolbar">
           <label className="resource-list-controls__search">
-            Find space
+            Find scope
             <input
               value={query}
               onChange={(event) => setQuery(event.currentTarget.value)}
-              placeholder="Search spaces"
+              placeholder="Search scopes"
               type="search"
             />
           </label>
@@ -3997,9 +3997,9 @@ function ContextManagerReadSurface({
                 type="button"
               >
                 <span className="context-card__main">
-                  <span className="context-card__title">{context.name || "Untitled context"}</span>
+                  <span className="context-card__title">{context.name || "Untitled scope"}</span>
                   <span className="context-card__path">
-                    {context.parent_name ?? (context.parent_id ? `Parent ${shortId(context.parent_id)}` : "Top-level space")}
+                    {context.parent_name ?? (context.parent_id ? `Parent ${shortId(context.parent_id)}` : "Top-level scope")}
                   </span>
                 </span>
                 <span className="context-card__meta">
@@ -4007,7 +4007,7 @@ function ContextManagerReadSurface({
                 </span>
                 <span className="context-card__stats">
                   <span>{identityCount} identities</span>
-                  <span>{context.child_count ?? 0} child spaces</span>
+                  <span>{context.child_count ?? 0} child scopes</span>
                 </span>
               </button>
             );
@@ -4038,13 +4038,13 @@ function ContextDetailView({
       <div className="context-detail-hero">
         <div>
           <div className="context-detail-hero__label">
-            {context.kind ? `${context.kind} space` : "Space"}
+            {context.kind ? `${context.kind} scope` : "Scope"}
           </div>
-          <div className="context-detail-hero__title">{context.name || "Untitled context"}</div>
+          <div className="context-detail-hero__title">{context.name || "Untitled scope"}</div>
           <div className="context-detail-hero__body">
             {isRoot
-              ? "This is a top-level space boundary."
-              : `Child space under ${context.parent_name ?? shortId(context.parent_id ?? "")}.`}
+              ? "This is a top-level scope boundary."
+              : `Child scope under ${context.parent_name ?? shortId(context.parent_id ?? "")}.`}
           </div>
         </div>
         <StatusPill tone={isRoot ? "success" : "neutral"} label={isRoot ? "root" : "child"} />
@@ -4077,7 +4077,7 @@ function ContextDetailView({
             <strong>{context.parent_name ?? (context.parent_id ? shortId(context.parent_id) : "No parent")}</strong>
           </div>
           <div className="context-hierarchy__node context-hierarchy__node--current">
-            <span>This space</span>
+            <span>This scope</span>
             <strong>{context.name || shortId(context.id)}</strong>
           </div>
           <div className="context-hierarchy__node">
@@ -4091,7 +4091,7 @@ function ContextDetailView({
         <summary>Advanced details</summary>
         <div className="kv-grid">
           <div className="kv">
-            <div className="kv__label">Space ID</div>
+            <div className="kv__label">Scope ID</div>
             <div className="kv__value">{context.id}</div>
           </div>
           <div className="kv">
@@ -4170,25 +4170,25 @@ function BadgeManagerSurface({
     return {
       id: badge.id,
       title: badge.name || badge.id,
-      subtitle: `context:${context?.name ?? badge.context_id}`,
+      subtitle: `scope:${context?.name ?? badge.context_id}`,
       status: archived ? "archived" : "definition",
       statusTone: archived ? "warning" : "neutral",
       tags: [
         "badge",
         archived ? "archived" : "active",
-        `context:${context?.name ?? "unknown"}`,
+        `scope:${context?.name ?? "unknown"}`,
       ],
       fields: [
-        { label: "Space", value: context?.name ?? "unknown" },
-        { label: "Space ID", value: badge.context_id },
+        { label: "Scope", value: context?.name ?? "unknown" },
+        { label: "Scope ID", value: badge.context_id },
         { label: "Description", value: badge.description ?? "No description" },
         { label: "Archived", value: badge.archived_at ?? "no" },
       ],
       relationships: [
         {
-          label: "Bound space",
+          label: "Bound scope",
           value: context?.name ?? badge.context_id,
-          detail: "Access labels are owned by the space where their badge definition is created.",
+          detail: "Access labels are owned by the scope where their badge definition is created.",
           tone: context ? "success" : "warning",
         },
         {
@@ -4221,10 +4221,10 @@ function BadgeManagerSurface({
     },
     {
       id: "context",
-      label: "Space",
-      render: (record) => record.fields?.find((field) => field.label === "Space")?.value ?? "unknown",
-      sortValue: (record) => String(record.fields?.find((field) => field.label === "Space")?.value ?? ""),
-      searchValue: (record) => String(record.fields?.find((field) => field.label === "Space")?.value ?? ""),
+      label: "Scope",
+      render: (record) => record.fields?.find((field) => field.label === "Scope")?.value ?? "unknown",
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Scope")?.value ?? ""),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Scope")?.value ?? ""),
     },
     {
       id: "status",
@@ -4249,7 +4249,7 @@ function BadgeManagerSurface({
     <ResourceInterfaceShell
       eyebrow="Access"
       title="Access Labels"
-      summary="Space-scoped access labels backed by badge definitions, archive posture, and assignment-bound relationship hints."
+      summary="Scope-scoped access labels backed by badge definitions, archive posture, and assignment-bound relationship hints."
       state={state}
       records={records}
       listColumns={columns}
@@ -4358,7 +4358,7 @@ function IdentityList({
     return {
       id: identity.id,
       title: account?.email ?? identity.id,
-      subtitle: `context:${context?.name ?? identity.context_id} · principal:${identity.principal_id}`,
+      subtitle: `scope:${context?.name ?? identity.context_id} · principal:${identity.principal_id}`,
       status: durable ? "durable" : "ephemeral",
       statusTone: durable ? "success" : "warning",
       tags: [
@@ -4369,8 +4369,8 @@ function IdentityList({
       fields: [
         { label: "Account", value: account?.email ?? identity.account_id },
         { label: "Account ID", value: identity.account_id },
-        { label: "Space", value: context?.name ?? identity.context_id },
-        { label: "Space ID", value: identity.context_id },
+        { label: "Scope", value: context?.name ?? identity.context_id },
+        { label: "Scope ID", value: identity.context_id },
         { label: "Principal", value: identity.principal_id },
         { label: "Principal Type", value: identity.principal.principal_type },
         { label: "Access Labels", value: identity.badge_ids?.length ?? 0 },
@@ -4379,13 +4379,13 @@ function IdentityList({
         {
           label: "Account",
           value: account?.email ?? identity.account_id,
-          detail: "The account owns authentication and may have multiple context-bound identities.",
+          detail: "The account owns authentication and may have multiple scope-bound identities.",
           tone: account ? "success" : "warning",
         },
         {
-          label: "Space",
+          label: "Scope",
           value: context?.name ?? identity.context_id,
-          detail: "Authority is scoped through this identity in this space, not across account siblings.",
+          detail: "Authority is scoped through this identity in this scope, not across account siblings.",
           tone: context ? "success" : "warning",
         },
         {
@@ -4408,10 +4408,10 @@ function IdentityList({
     },
     {
       id: "context",
-      label: "Space",
-      render: (record) => record.fields?.find((field) => field.label === "Space")?.value ?? "unknown",
-      sortValue: (record) => String(record.fields?.find((field) => field.label === "Space")?.value ?? ""),
-      searchValue: (record) => String(record.fields?.find((field) => field.label === "Space")?.value ?? ""),
+      label: "Scope",
+      render: (record) => record.fields?.find((field) => field.label === "Scope")?.value ?? "unknown",
+      sortValue: (record) => String(record.fields?.find((field) => field.label === "Scope")?.value ?? ""),
+      searchValue: (record) => String(record.fields?.find((field) => field.label === "Scope")?.value ?? ""),
     },
     {
       id: "principal_type",
@@ -4443,7 +4443,7 @@ function IdentityList({
     <ResourceInterfaceShell
       eyebrow="People"
       title="People And Identities"
-      summary="Account-owned, space-bound identities with paired principal posture."
+      summary="Account-owned, scope-bound identities with paired principal posture."
       state={state}
       records={records}
       listColumns={columns}
