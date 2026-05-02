@@ -27,8 +27,10 @@ export interface AccountAuthMethodReadModel {
 
 export interface ContextReadModel {
   id: string;
+  domain_id?: string;
   parent_id?: string;
   parent_name?: string;
+  root_scope_id?: string;
   root_context_id?: string;
   name: string;
   description?: string;
@@ -44,6 +46,8 @@ export interface ContextReadModel {
 export interface PrincipalReadModel {
   id: string;
   account_id?: string;
+  domain_id?: string;
+  scope_id?: string;
   context_id: string;
   principal_type: string;
   is_ephemeral: boolean;
@@ -58,6 +62,8 @@ export interface PrincipalReadModel {
 export interface IdentityReadModel {
   id: string;
   account_id: string;
+  domain_id?: string;
+  scope_id?: string;
   context_id: string;
   principal_id: string;
   principal: PrincipalReadModel;
@@ -67,6 +73,7 @@ export interface IdentityReadModel {
 
 export interface BadgeDefinitionReadModel {
   id: string;
+  scope_id?: string;
   context_id: string;
   name: string;
   description?: string;
@@ -77,7 +84,9 @@ export interface PrincipalBadgeGrantReadModel {
   id: string;
   principal_id: string;
   badge_id: string;
+  scope_id?: string;
   context_id: string;
+  effective_scope_id?: string;
   effective_context_id?: string;
   inherited?: boolean;
   scope_mode?: string;
@@ -99,6 +108,7 @@ export interface ServiceDefinitionReadModel {
 
 export interface ContextServiceBindingReadModel {
   id: string;
+  scope_id?: string;
   context_id: string;
   service_id: string;
   service_key?: string;
@@ -112,7 +122,9 @@ export interface ContextServiceBindingReadModel {
 export interface AccountNamespaceReadModel {
   id: string;
   name: string;
+  owning_scope_id?: string;
   owning_context_id: string;
+  default_scope_id?: string;
   default_context_id: string;
   status: string;
   archived_at?: string;
@@ -122,7 +134,9 @@ export interface InterfaceBindingReadModel {
   id: string;
   interface_key: string;
   account_namespace_id: string;
+  owning_scope_id?: string;
   owning_context_id: string;
+  default_scope_id?: string;
   default_context_id: string;
   display_name?: string;
   status: string;
@@ -180,6 +194,7 @@ export interface AuthorityAuditEventReadModel {
   resource_id: string;
   actor_principal_id?: string;
   target_principal_id?: string;
+  scope_id?: string;
   context_id?: string;
   status: string;
   error_code?: string;
@@ -191,6 +206,7 @@ export interface AuthorityAuditEventReadModel {
 export interface AuthorityOverviewReadModel {
   accounts?: AccountReadModel[];
   auth_methods?: AccountAuthMethodReadModel[];
+  scopes?: ContextReadModel[];
   contexts?: ContextReadModel[];
   identities?: IdentityReadModel[];
   principals?: PrincipalReadModel[];
@@ -211,6 +227,8 @@ export interface AuthorityReadFilter {
   account_id?: string;
   identity_id?: string;
   principal_id?: string;
+  domain_id?: string;
+  scope_id?: string;
   context_id?: string;
   status?: string;
   limit?: number;
@@ -221,6 +239,7 @@ export type AuthorityReadSurface =
   | "overview"
   | "accounts"
   | "auth_methods"
+  | "scopes"
   | "contexts"
   | "identities"
   | "principals"
@@ -245,6 +264,13 @@ export type AuthorityMutationCommand =
   | "subject.create"
   | "identity.create"
   | "principal.create_durable"
+  | "scope.create"
+  | "scope.create_child"
+  | "scope.create_org_root"
+  | "scope.create_personal_root"
+  | "scope.update"
+  | "scope.archive"
+  | "scope.transfer_ownership"
   | "context.create"
   | "context.create_child"
   | "context.create_org_root"
@@ -257,6 +283,7 @@ export type AuthorityMutationCommand =
   | "badge_definition.archive"
   | "principal_badge.grant"
   | "principal_badge.revoke"
+  | "scope_service.provision"
   | "context_service.provision"
   | "domain_binding.create"
   | "domain_binding.verify"
@@ -277,6 +304,7 @@ export interface AuthorityMutationResult {
   command_id?: string;
   idempotency_key?: string;
   actor_principal_id?: string;
+  target_scope_id?: string;
   target_context_id?: string;
   resource_type?: string;
   resource_id?: string;

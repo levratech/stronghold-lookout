@@ -471,7 +471,7 @@ function grantPostureFromResponse(grant: BrowserTransportGrantResponse): NatsGra
     credentialId: stringClaim(claims, "jti"),
     principalId: stringClaim(claims, "principal_id"),
     activePrincipalId: stringClaim(claims, "active_principal_id"),
-    contextId: stringClaim(claims, "context_id"),
+    contextId: stringClaim(claims, "scope_id") ?? stringClaim(claims, "context_id"),
     rail: stringClaim(claims, "rail"),
     profile: stringClaim(claims, "profile"),
     issuedAt: timeClaim(claims, "iat"),

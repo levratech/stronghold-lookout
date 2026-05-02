@@ -64,6 +64,7 @@ interface RawAuthorityListResponse<T> {
   page?: PageInfo;
   accounts?: T[];
   auth_methods?: T[];
+  scopes?: T[];
   contexts?: T[];
   identities?: T[];
   principals?: T[];
@@ -102,12 +103,13 @@ export class AuthorityMutationError extends Error {
 }
 
 function authorityReadURL(surface: AuthorityReadSurface, filter: AuthorityReadFilter = {}) {
+  const normalizedFilter = normalizeReadFilter(filter) ?? {};
   const base =
     surface === "overview"
       ? lookoutEnvironment.authorityReadBasePath
       : `${lookoutEnvironment.authorityReadBasePath}/${surface}`;
   const url = new URL(base, window.location.origin);
-  for (const [key, value] of Object.entries(filter)) {
+  for (const [key, value] of Object.entries(normalizedFilter)) {
     if (value === undefined || value === "") {
       continue;
     }
@@ -117,13 +119,16 @@ function authorityReadURL(surface: AuthorityReadSurface, filter: AuthorityReadFi
 }
 
 function authorityMutationURL(command: AuthorityMutationCommand) {
-  return new URL(`/_/authority/mutate/${command}`, window.location.origin);
+  return new URL(`/_/authority/mutate/${canonicalMutationCommand(command)}`, window.location.origin);
 }
 
 function authorityReadSubject(surface: AuthorityReadSurface) {
   switch (surface) {
     case "overview":
       return "stronghold.authority.read.overview";
+    case "contexts":
+    case "scopes":
+      return "stronghold.authority.read.scopes";
     case "badges":
       return "stronghold.authority.read.badge_definitions";
     case "grants":
@@ -150,10 +155,11 @@ function authorityReadSubject(surface: AuthorityReadSurface) {
 }
 
 function natsReadPayload(filter?: AuthorityReadFilter) {
-  if (!filter) {
+  const normalizedFilter = normalizeReadFilter(filter);
+  if (!normalizedFilter) {
     return new TextEncoder().encode("{}");
   }
-  return new TextEncoder().encode(JSON.stringify(filter));
+  return new TextEncoder().encode(JSON.stringify(normalizedFilter));
 }
 
 async function readJSON<T>(
@@ -201,7 +207,9 @@ async function mutateJSON<T extends object>(
   payload: T,
   signing?: AuthorityMutationSigningOptions,
 ): Promise<AuthorityMutationResult> {
-  const body = JSON.stringify(payload);
+  const canonicalCommand = canonicalMutationCommand(command);
+  const canonicalPayload = normalizeMutationPayload(payload);
+  const body = JSON.stringify(canonicalPayload);
   const headers: Record<string, string> = {
     Accept: "application/json",
     "Content-Type": "application/json",
@@ -210,8 +218,8 @@ async function mutateJSON<T extends object>(
   };
   if (signing && authorityMutationRequiresSignature(command)) {
     const signedData = {
-      command_type: command,
-      payload,
+      command_type: canonicalCommand,
+      payload: canonicalPayload,
     };
     const signature = await signCommandPayload({
       principalId: signing.principalId,
@@ -241,6 +249,13 @@ async function mutateJSON<T extends object>(
 
 export function authorityMutationRequiresSignature(command: AuthorityMutationCommand) {
   return [
+    "scope.create",
+    "scope.create_child",
+    "scope.create_org_root",
+    "scope.create_personal_root",
+    "scope.update",
+    "scope.archive",
+    "scope.transfer_ownership",
     "context.create",
     "context.create_child",
     "context.create_org_root",
@@ -250,6 +265,7 @@ export function authorityMutationRequiresSignature(command: AuthorityMutationCom
     "context.transfer_ownership",
     "principal_badge.grant",
     "principal_badge.revoke",
+    "scope_service.provision",
     "context_service.provision",
     "domain_binding.create",
     "domain_binding.verify",
@@ -264,10 +280,78 @@ export function authorityMutationRequiresSignature(command: AuthorityMutationCom
 }
 
 function normalizeList<T>(payload: RawAuthorityListResponse<T>, key: keyof RawAuthorityListResponse<T>) {
+  const rawItems = Array.isArray(payload[key]) ? (payload[key] as T[]) : [];
   return {
-    items: Array.isArray(payload[key]) ? (payload[key] as T[]) : [],
+    items: rawItems.map(normalizeAuthorityItem),
     page: payload.page ?? { limit: 0 },
   };
+}
+
+function normalizeReadFilter(filter?: AuthorityReadFilter) {
+  if (!filter) {
+    return undefined;
+  }
+  const normalized: AuthorityReadFilter = { ...filter };
+  if (!normalized.scope_id && normalized.context_id) {
+    normalized.scope_id = normalized.context_id;
+  }
+  delete normalized.context_id;
+  return normalized;
+}
+
+function normalizeMutationPayload<T extends object>(payload: T): T {
+  const normalized: Record<string, unknown> = { ...(payload as Record<string, unknown>) };
+  if (!normalized.scope_id && normalized.context_id) {
+    normalized.scope_id = normalized.context_id;
+  }
+  delete normalized.context_id;
+  return normalized as T;
+}
+
+function canonicalMutationCommand(command: AuthorityMutationCommand): AuthorityMutationCommand {
+  switch (command) {
+    case "context.create":
+      return "scope.create";
+    case "context.create_child":
+      return "scope.create_child";
+    case "context.create_org_root":
+      return "scope.create_org_root";
+    case "context.create_personal_root":
+      return "scope.create_personal_root";
+    case "context.update":
+      return "scope.update";
+    case "context.archive":
+      return "scope.archive";
+    case "context.transfer_ownership":
+      return "scope.transfer_ownership";
+    case "context_service.provision":
+      return "scope_service.provision";
+    default:
+      return command;
+  }
+}
+
+function normalizeAuthorityItem<T>(item: T): T {
+  if (!item || typeof item !== "object") {
+    return item;
+  }
+  const normalized: Record<string, unknown> = { ...(item as Record<string, unknown>) };
+  if (!normalized.context_id && normalized.scope_id) {
+    normalized.context_id = normalized.scope_id;
+  }
+  if (!normalized.root_context_id && normalized.root_scope_id) {
+    normalized.root_context_id = normalized.root_scope_id;
+  }
+  if (!normalized.effective_context_id && normalized.effective_scope_id) {
+    normalized.effective_context_id = normalized.effective_scope_id;
+  }
+  if (!normalized.owning_context_id && normalized.owning_scope_id) {
+    normalized.owning_context_id = normalized.owning_scope_id;
+  }
+  if (!normalized.default_context_id && normalized.default_scope_id) {
+    normalized.default_context_id = normalized.default_scope_id;
+  }
+  return normalized as T;
 }
 
 export function readAuthorityOverview(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
@@ -296,12 +380,12 @@ export async function readAccountAuthMethods(signal?: AbortSignal, filter?: Auth
 
 export async function readContexts(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
   const payload = await readJSON<RawAuthorityListResponse<ContextReadModel>>(
-    "contexts",
+    "scopes",
     signal,
     filter,
     transport,
   );
-  return normalizeList(payload, "contexts") as AuthorityListResponse<ContextReadModel>;
+  return normalizeList(payload, "scopes") as AuthorityListResponse<ContextReadModel>;
 }
 
 export async function readIdentities(signal?: AbortSignal, filter?: AuthorityReadFilter, transport?: AuthorityNatsReadTransport) {
