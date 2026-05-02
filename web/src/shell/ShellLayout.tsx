@@ -90,6 +90,7 @@ export function ShellLayout() {
   const manageModules = manageModuleIds.map((moduleId) => moduleById.get(moduleId)).filter(isLookoutModule);
   const accountModules = accountModuleIds.map((moduleId) => moduleById.get(moduleId)).filter(isLookoutModule);
   const debugModules = debugModuleIds.map((moduleId) => moduleById.get(moduleId)).filter(isLookoutModule);
+  const showDiagnostics = snapshot.interfaceMode === "system";
   const activeAccountId = activePrincipal?.accountId ?? snapshot.account?.accountId ?? root?.accountId ?? "";
   const [workspaceContexts, setWorkspaceContexts] = useState<WorkspaceContextState>({
     status: "idle",
@@ -225,6 +226,7 @@ export function ShellLayout() {
                   <StatusPill tone={sessionTone(snapshot.status)} label={snapshot.status} />
                 </div>
                 <div className="operator-menu__primary">{operatorSummary}</div>
+                <div className="operator-menu__muted">Interface mode: {snapshot.interfaceMode}</div>
                 <div className="operator-menu__muted">
                   {root?.principalId && activePrincipal?.principalId && root.principalId !== activePrincipal.principalId
                     ? `Root ${root.principalId} -> active ${activePrincipal.principalId}`
@@ -353,23 +355,25 @@ export function ShellLayout() {
                 </div>
               </div>
 
-              <details className="workspace-nav workspace-nav--debug">
-                <summary className="workspace-nav__label workspace-nav__label--summary">Diagnostics</summary>
-                <div className="workspace-nav__manage">
-                  {debugModules.map((module) => (
-                    <NavLink
-                      key={module.id}
-                      to={module.route}
-                      className={({ isActive }) => `nav-link nav-link--compact${isActive ? " nav-link--active" : ""}`}
-                    >
-                      <div className="nav-link__icon">{module.icon}</div>
-                      <div className="nav-link__text">
-                        <div className="nav-link__title">{module.navLabel}</div>
-                      </div>
-                    </NavLink>
-                  ))}
-                </div>
-              </details>
+              {showDiagnostics ? (
+                <details className="workspace-nav workspace-nav--debug">
+                  <summary className="workspace-nav__label workspace-nav__label--summary">System Diagnostics</summary>
+                  <div className="workspace-nav__manage">
+                    {debugModules.map((module) => (
+                      <NavLink
+                        key={module.id}
+                        to={module.route}
+                        className={({ isActive }) => `nav-link nav-link--compact${isActive ? " nav-link--active" : ""}`}
+                      >
+                        <div className="nav-link__icon">{module.icon}</div>
+                        <div className="nav-link__text">
+                          <div className="nav-link__title">{module.navLabel}</div>
+                        </div>
+                      </NavLink>
+                    ))}
+                  </div>
+                </details>
+              ) : null}
             </nav>
           </section>
         </div>
